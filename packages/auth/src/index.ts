@@ -1,5 +1,10 @@
 import { type Database, getDb } from "@et/db";
 import * as schema from "@et/db/schema";
+import {
+	createConsoleSender,
+	type EmailSender,
+	passwordResetEmail,
+} from "@et/email";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
@@ -16,7 +21,15 @@ type AuthConfig = {
 		clientId: string;
 		clientSecret: string;
 	};
+	/**
+	 * Where transactional mail goes. Defaults to printing it, so password reset
+	 * works locally before a sending domain exists.
+	 */
+	email?: EmailSender;
 };
+
+/** How long a password-reset link stays valid. */
+const RESET_TOKEN_TTL_SECONDS = 60 * 60;
 
 /**
  * Build the Better Auth instance.
@@ -26,6 +39,8 @@ type AuthConfig = {
  * there is no ambient process environment to rely on.
  */
 export function createAuth(config: AuthConfig, db: Database = getDb()) {
+	const email = config.email ?? createConsoleSender();
+
 	return betterAuth({
 		secret: config.secret,
 		baseURL: config.baseUrl,
@@ -35,6 +50,16 @@ export function createAuth(config: AuthConfig, db: Database = getDb()) {
 		}),
 		emailAndPassword: {
 			enabled: true,
+			sendResetPassword: async ({ user, url }) => {
+				await email.send(
+					passwordResetEmail({
+						to: user.email,
+						url,
+						expiresInMinutes: RESET_TOKEN_TTL_SECONDS / 60,
+					}),
+				);
+			},
+			resetPasswordTokenExpiresIn: RESET_TOKEN_TTL_SECONDS,
 			// No email sender is wired up yet, so a verification mail could never
 			// arrive and would lock every new account out. Turn this on in the same
 			// change that adds the sender, not before.
@@ -80,7 +105,7 @@ export function createAuth(config: AuthConfig, db: Database = getDb()) {
  */
 export function createAuthFromEnv(
 	env: Record<string, string | undefined>,
-	db?: Database,
+	options: { db?: Database; email?: EmailSender } = {},
 ): Auth {
 	const secret = required(env, "BETTER_AUTH_SECRET");
 	const baseUrl = required(env, "BETTER_AUTH_URL").replace(/\/+$/, "");
@@ -97,8 +122,9 @@ export function createAuthFromEnv(
 			...(clientId && clientSecret
 				? { google: { clientId, clientSecret } }
 				: {}),
+			...(options.email ? { email: options.email } : {}),
 		},
-		db,
+		options.db,
 	);
 }
 

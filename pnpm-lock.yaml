@@ -32,6 +32,9 @@ importers:
       '@et/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@et/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@t3-oss/env-core':
         specifier: ^0.13.10
         version: 0.13.11(typescript@6.0.3)(zod@4.6.5)
@@ -172,6 +175,9 @@ importers:
       '@et/db':
         specifier: workspace:*
         version: link:../db
+      '@et/email':
+        specifier: workspace:*
+        version: link:../email
       better-auth:
         specifier: ^1.7.6
         version: 1.7.6(@tanstack/react-start@1.168.58(crossws@0.4.12(srvx@0.11.22))(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.11)(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)))(drizzle-kit@0.31.11)(drizzle-orm@0.45.3(@neondatabase/serverless@1.1.0)(kysely@0.29.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(solid-js@1.9.15)
@@ -211,6 +217,19 @@ importers:
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.3
+
+  packages/email:
+    dependencies:
+      '@et/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.4
       typescript:
         specifier: ^6.0.2
         version: 6.0.3

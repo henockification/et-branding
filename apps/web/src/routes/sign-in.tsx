@@ -106,6 +106,10 @@ function SignIn() {
 				<Button type="submit" className="w-full" disabled={pending}>
 					{pending ? "Signing in…" : "Sign in"}
 				</Button>
+
+				<p className="type-caption text-center text-muted-foreground">
+					<Link to="/forgot-password">Forgot your password?</Link>
+				</p>
 			</form>
 		</AuthCard>
 	);

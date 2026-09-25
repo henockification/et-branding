@@ -1,5 +1,5 @@
 {
-  "name": "@et/auth",
+  "name": "@et/email",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,9 +12,7 @@
     "lint": "biome lint src"
   },
   "dependencies": {
-    "@et/db": "workspace:*",
-    "@et/email": "workspace:*",
-    "better-auth": "^1.7.6"
+    "@et/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

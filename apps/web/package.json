@@ -22,6 +22,7 @@
     "@et/auth": "workspace:*",
     "@et/core": "workspace:*",
     "@et/db": "workspace:*",
+    "@et/email": "workspace:*",
     "@t3-oss/env-core": "^0.13.10",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",

@@ -9,6 +9,10 @@
   "observability": {
     "enabled": true
   },
+  // Cloudflare Email Service. Sending only works once the EMAIL_FROM domain is
+  // onboarded: `pnpm --filter @et/web exec wrangler email sending enable <domain>`.
+  // Until then resolveEmailSender falls back to printing mail to the log.
+  "send_email": [{ "name": "EMAIL" }],
   // Secrets are NOT set here. Push them with:
   //   pnpm --filter @et/web exec wrangler secret put DATABASE_URL
   //   pnpm --filter @et/web exec wrangler secret put DEEPSEEK_API_KEY

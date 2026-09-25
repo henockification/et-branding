@@ -23,6 +23,15 @@ BETTER_AUTH_URL="http://localhost:3100"
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
 
+# --- Email ----------------------------------------------------------------
+# Cloudflare Email Service. Password reset only actually sends once EMAIL_FROM
+# is on a domain onboarded onto Email Sending:
+#   pnpm --filter @et/web exec wrangler email sending enable yourdomain.com
+# Leave it empty and reset mail is printed to the dev server log instead — the
+# flow still works end to end, it just does not leave the machine.
+EMAIL_FROM=""
+EMAIL_REPLY_TO=""
+
 # --- Model providers ------------------------------------------------------
 # Only the providers you use need a key — the registry fails per-provider, not
 # at startup. DeepSeek is the cheapest tool-capable provider and backs the

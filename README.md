@@ -11,6 +11,7 @@ Neon Postgres via Drizzle, and a provider-agnostic TypeScript agent layer.
 | `packages/agents` | Agents on the Vercel AI SDK — model registry, tiers, cost accounting       |
 | `packages/db`     | Drizzle schema and a Neon client built for Workers                         |
 | `packages/auth`   | Better Auth config — email/password and Google, on the Drizzle adapter     |
+| `packages/email`  | Transactional email: Cloudflare Email Service, with a log-only fallback   |
 | `packages/core`   | Branding constants plus shared domain types and Zod schemas                |
 
 ## Getting started
@@ -62,11 +63,15 @@ endpoints reachable on their own. Every function that touches user data
 re-checks the session itself and throws a 401 — see `requireUserId` in
 `apps/web/src/server/brands.ts`, and copy that pattern for new ones.
 
-Two deliberate settings: email verification is **off**, because no email sender
-is wired up and a verification mail that never arrives would lock out every new
-account — turn it on in the same change that adds the sender. And sign-in
-failures say only "that email and password do not match an account", so the
-form cannot be used to discover which addresses have accounts.
+Password reset is wired: `/forgot-password` → emailed link → `/reset-password`.
+Tokens last an hour and are single-use. Sign-in failures say only "that email
+and password do not match an account", and the reset form says "if that address
+has an account" whether or not it does — neither can be used to discover which
+addresses are registered.
+
+Email verification is still **off**. Turn it on once real mail is sending,
+in the same change — a verification mail that never arrives locks out every
+new account.
 
 Auth tables mirror exactly what Better Auth's `getAuthTables()` reports, so the
 adapter finds every field. Keep product columns out of them — application data
@@ -144,6 +149,30 @@ Cost control, in order of leverage:
 Catalog prices are indicative and stamped with `pricedOn`. Check them against
 the provider's pricing page before quoting a number to anyone.
 
+## Email
+
+Cloudflare Email Service through the Workers `send_email` binding — no API key,
+since the binding carries the account's own authority. `resolveEmailSender`
+picks it when both the binding and `EMAIL_FROM` are present, and otherwise
+falls back to a sender that prints the message to the log.
+
+That fallback is deliberate, not a stub: Email Service will only accept a
+`from` on a domain onboarded with `wrangler email sending enable`, which a
+local machine does not have. Printing the mail keeps password reset testable
+offline, and makes it obvious in the log that nothing was delivered. To send
+for real:
+
+```bash
+pnpm --filter @et/web exec wrangler email sending enable yourdomain.com
+```
+
+then set `EMAIL_FROM` to an address on that domain.
+
+Templates are plain HTML with inline styles — mail clients strip stylesheets,
+and CSS variables do not survive the trip, so the brand colour is inlined.
+Every message ships `html` and `text`; some clients show only the latter, and
+it helps spam scores.
+
 ## Database
 
 Neon over Drizzle, using the **HTTP** driver rather than the WebSocket pool:
@@ -184,8 +213,8 @@ pnpm check       # biome check
 
 ## Not yet decided
 
-- **Email.** No sender, so no password reset and no email verification.
-  Cloudflare Email Service fits the stack.
+- **A sending domain.** Reset mail is written to the log until one is
+  onboarded (see Email above), and email verification stays off until then.
 - **The domain itself.** The brand book says what the product is — a team of
   agents doing strategy, content, design and distribution — but not how it
   works: no user flows, no data model, no agent hand-offs.
