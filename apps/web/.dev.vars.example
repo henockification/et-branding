@@ -1,0 +1,36 @@
+# Local secrets. Copy to `.env` (or `.dev.vars` — either name works; `pnpm dev`
+# links one to the other so there is only ever one file to edit).
+#
+# None of this is read in production: push those with
+#   pnpm --filter @et/web exec wrangler secret put <NAME>
+
+# --- Database -------------------------------------------------------------
+# Neon connection string, pooled endpoint. Use a dev branch locally — Neon
+# branches are cheap and keep your data away from production.
+DATABASE_URL=""
+
+# --- Auth -----------------------------------------------------------------
+# Signs session cookies. Changing it signs everyone out.
+#   openssl rand -base64 32
+BETTER_AUTH_SECRET=""
+# The app's own origin, no trailing slash. Must match in production.
+BETTER_AUTH_URL="http://localhost:3100"
+
+# Optional: "Continue with Google". Both halves or neither — the sign-in page
+# hides the button unless both are set. Create an OAuth client at
+# console.cloud.google.com, with this redirect URI:
+#   http://localhost:3100/api/auth/callback/google
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+
+# --- Model providers ------------------------------------------------------
+# Only the providers you use need a key — the registry fails per-provider, not
+# at startup. DeepSeek is the cheapest tool-capable provider and backs the
+# cheap and balanced tiers.
+DEEPSEEK_API_KEY=""
+ANTHROPIC_API_KEY=""
+OPENAI_API_KEY=""
+
+# Optional: force every agent tier onto one catalog model to compare providers.
+# Must be an id from packages/agents/src/models/catalog.ts.
+# ET_DEFAULT_MODEL=""

@@ -1,0 +1,21 @@
+{
+  "name": "@et/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "biome check src",
+    "lint": "biome lint src"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.5",
+    "typescript": "^6.0.2"
+  }
+}

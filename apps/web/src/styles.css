@@ -1,0 +1,328 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Tokens from the ET Branding design system, copied exactly — do not round or
+ * re-derive these values. Ultraviolet is the base; spark lime is the
+ * counterpoint and is rationed to one moment per screen. Even the neutrals are
+ * violet-tinted so nothing on the page reads as off-brand grey.
+ */
+:root {
+  --brand: #6a2be0;
+  --brand-deep: #3b138f;
+  --brand-soft: #a77bff;
+  --brand-wash: #ede5ff;
+  --spark: #c8f03c;
+  --ink: #160935;
+  --muted-ink: #5e5478;
+  --surface: #f7f4fd;
+  --surface-raised: #ffffff;
+  --on-brand: #ffffff;
+  --hairline: #ddd3f5;
+
+  /* shadcn's token names, mapped onto the brand tokens above. */
+  --background: var(--surface);
+  --foreground: var(--ink);
+  --card: var(--surface-raised);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--ink);
+
+  --primary: var(--brand);
+  --primary-foreground: var(--on-brand);
+  --secondary: var(--brand-wash);
+  --secondary-foreground: var(--brand-deep);
+  --muted: var(--brand-wash);
+  --muted-foreground: var(--muted-ink);
+  --accent: var(--brand-wash);
+  --accent-foreground: var(--brand-deep);
+  --destructive: #c3123c;
+  --destructive-foreground: #ffffff;
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--brand);
+
+  /* Placeholders: design a real chart palette alongside the first chart. */
+  --chart-1: var(--brand);
+  --chart-2: var(--brand-soft);
+  --chart-3: var(--brand-deep);
+  --chart-4: var(--spark);
+  --chart-5: var(--muted-ink);
+
+  --radius: 12px;
+
+  --sidebar: var(--surface-raised);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: var(--on-brand);
+  --sidebar-accent: var(--brand-wash);
+  --sidebar-accent-foreground: var(--brand-deep);
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: var(--brand);
+}
+
+.dark {
+  --brand: #8f5cff;
+  --brand-deep: #4c1ab8;
+  --brand-soft: #c9b2ff;
+  --brand-wash: #221052;
+  --spark: #c8f03c;
+  --ink: #f3eeff;
+  --muted-ink: #b3a8d1;
+  --surface: #0f0626;
+  --surface-raised: #1b0c40;
+  --on-brand: #ffffff;
+  --hairline: #2e1a63;
+
+  --destructive: #ff5c7a;
+  --destructive-foreground: #160935;
+}
+
+@theme inline {
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  --color-brand: var(--brand);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-wash: var(--brand-wash);
+  --color-spark: var(--spark);
+  --color-ink: var(--ink);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-on-brand: var(--on-brand);
+  --color-hairline: var(--hairline);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* The system's own radius steps, not a calc ladder off one value. */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+
+  /* The system's spacing steps, available as p-brand-4, gap-brand-6 and so on. */
+  --spacing-brand-2: 8px;
+  --spacing-brand-4: 16px;
+  --spacing-brand-6: 24px;
+  --spacing-brand-12: 48px;
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background-color: var(--surface);
+    color: var(--ink);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /*
+   * Bare links only. Anything carrying a colour utility must win over this —
+   * unlayered rules outrank every Tailwind layer, which is why this sits in
+   * @layer base and excludes elements that style themselves.
+   */
+  a:not([class*='text-']):not([data-slot='button']) {
+    color: var(--brand);
+    text-decoration-color: color-mix(in oklab, var(--brand) 40%, transparent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+
+  a:not([class*='text-']):not([data-slot='button']):hover {
+    color: color-mix(in oklab, var(--brand) 82%, var(--ink));
+  }
+
+  code {
+    font-size: 0.9em;
+    border: 1px solid var(--hairline);
+    background: var(--brand-wash);
+    border-radius: var(--radius-sm);
+    padding: 2px 7px;
+  }
+
+  pre code {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+    color: inherit;
+  }
+}
+
+/*
+ * The type scale, one class per named style in the system. Kept in
+ * @layer components so a utility can still override any single property.
+ */
+@layer components {
+  .page-wrap {
+    width: min(1080px, calc(100% - 2 * var(--spacing-brand-6)));
+    margin-inline: auto;
+  }
+
+  .type-display-xl {
+    font-family: var(--font-display);
+    font-size: 72px;
+    line-height: 0.95;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+
+  .type-display-l {
+    font-family: var(--font-display);
+    font-size: 48px;
+    line-height: 1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .type-heading {
+    font-family: var(--font-display);
+    font-size: 28px;
+    line-height: 34px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .type-title {
+    font-size: 18px;
+    line-height: 26px;
+    font-weight: 600;
+  }
+
+  .type-body {
+    font-size: 15px;
+    line-height: 23px;
+    font-weight: 400;
+  }
+
+  .type-caption {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+  }
+
+  .type-label {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /*
+   * The wordmark beside the mark: Space Grotesk Bold at −2% tracking, its cap
+   * height about 40% of the mark's height, one dot-width to the right.
+   */
+  .wordmark {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+
+  /* Spark lime never carries white text — only ink, at 14:1. */
+  .spark-badge {
+    background: var(--spark);
+    color: #160935;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+  }
+
+  @media (max-width: 640px) {
+    .type-display-xl {
+      font-size: 44px;
+    }
+
+    .type-display-l {
+      font-size: 34px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: none;
+  }
+}
+
+.rise-in {
+  animation: rise-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+button,
+a {
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+}

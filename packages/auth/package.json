@@ -1,0 +1,22 @@
+{
+  "name": "@et/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "biome check src",
+    "lint": "biome lint src"
+  },
+  "dependencies": {
+    "@et/db": "workspace:*",
+    "better-auth": "^1.7.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^6.0.2"
+  }
+}

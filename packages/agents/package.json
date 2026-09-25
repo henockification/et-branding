@@ -1,0 +1,28 @@
+{
+  "name": "@et/agents",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./models": "./src/models/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "biome check src",
+    "lint": "biome lint src"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.63",
+    "@ai-sdk/deepseek": "^3.0.52",
+    "@ai-sdk/openai": "^4.0.75",
+    "@et/core": "workspace:*",
+    "ai": "^7.0.114",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.5",
+    "@types/node": "^22.10.2",
+    "typescript": "^6.0.2"
+  }
+}
