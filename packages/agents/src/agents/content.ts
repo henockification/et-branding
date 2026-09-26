@@ -17,6 +17,14 @@ export type BrandContext = {
 	services?: Record<string, unknown> | null;
 	/** Past posts to imitate. Empty until the Brain has documents. */
 	examples?: readonly string[];
+	/**
+	 * Posts a human rewrote: what the agent wrote, and what they changed it to.
+	 *
+	 * Worth more than an example. A good post shows what the brand sounds like;
+	 * a correction shows precisely where this agent went wrong, which is the one
+	 * thing an example can never convey.
+	 */
+	corrections?: readonly { before: string; after: string }[];
 };
 
 export type DraftRequest = {
@@ -60,11 +68,26 @@ function instructionsFor(brand: BrandContext, language: Language): string {
 				]
 			: [];
 
+	// Last in the prompt, so it is the most recent instruction before the brief:
+	// these are the mistakes this agent actually made for this brand.
+	const corrections =
+		brand.corrections && brand.corrections.length > 0
+			? [
+					"",
+					"Drafts a human rewrote. Learn the difference — do not repeat what was changed:",
+					...brand.corrections.flatMap((correction) => [
+						`- You wrote: ${correction.before}`,
+						`  They wanted: ${correction.after}`,
+					]),
+				]
+			: [];
+
 	return [
 		`You are a social media copywriter for ${brand.name}.`,
 		"",
 		...facts,
 		...examples,
+		...corrections,
 		"",
 		`Write in ${language.promptName}.`,
 		"",

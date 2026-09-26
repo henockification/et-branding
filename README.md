@@ -187,6 +187,30 @@ Cloudflare Workers AI through a Worker binding, which adds no new vendor and has
 multilingual models. Not wired up yet; the choice changes the embedding column
 width, so it is cheaper to settle before loading documents.
 
+## The Brand Brain
+
+`brand_profiles` is the structured half — name, summary, voice, audience,
+services — edited at `/workspace/$orgId` and handed to every agent before it
+writes a word. The shapes live in `packages/core/src/brand-profile.ts` because
+they are the contract between the form and the prompt; they are JSON columns,
+so adding a field needs no migration, but it also needs a line in the prompt
+builder to have any effect.
+
+How much this matters, measured on the same brief with the same model:
+
+> **Empty profile:** "The first sip tastes like a clear morning in the
+> highlands… a finish that lingers like a deep breath. Slow down, taste the
+> difference."
+>
+> **Filled profile:** "New roast on the shelf. Yirgacheffe. Clean, bright,
+> floral. Tastes like the highlands it comes from. Available now for wholesale
+> and home subscription."
+
+The second one obeys every rule the profile set — short sentences, names the
+region, no exclamation marks, none of the banned jargon — and mentions the
+actual sales channels. The extra context cost 158 input tokens, about
+$0.000007. Filling the profile is the cheapest quality improvement available.
+
 ## The Telegram bot
 
 The bot is the product's main interface — Ethiopian businesses live on
@@ -216,11 +240,73 @@ at 64 characters, so it packs the org id, an expiry and a truncated HMAC into
 job, and no forging a link by guessing an org id. Owners and approvers mint
 them from the dashboard; they last 24 hours.
 
+**Capturing past posts.** Forward a post to the bot and it is saved as a
+`brand_document` — no command, because a forward is an unambiguous "learn from
+this". Typed text needs `/remember`, otherwise every "ok" in the chat becomes
+training data. Photo captions are captured (the words, not yet the image),
+duplicates are refused, and anything under 40 characters is rejected as a
+remark rather than a post. `/brain` reports what the brain holds.
+
+### What a draft learns from
+
+Three sources, each capped separately, all replayed into the prompt:
+
+| Source | Cap | Why |
+| --- | --- | --- |
+| Past posts (`brand_documents`) | 50 | What the brand sounds like |
+| Approved drafts, untouched | 20 | The agent got these right — capped lower, since they are its own output and it can reinforce its own habits |
+| Corrections (`original_body` → `body`) | 10 | Exactly where it went wrong — capped tightest, so old mistakes do not drown out the voice |
+
+Corrections come last in the prompt, closest to the brief.
+
+**Measured:** with three consistent corrections stripping hashtags, emoji and
+hype, the same brief went from
+
+> "Capture your corporate story with precision… #CorporatePhotography
+> #EventProduction"
+
+to
+
+> "We now offer photography for corporate events. Contact us for details."
+
+One correction nudges; three change the behaviour decisively.
+
+**The limit worth knowing:** corrections teach *style*, not *facts*. When a
+human's rewrite adds information the agent never had — a time, a price, a venue
+— there is nothing there to learn, and the next draft will not invent it. That
+is the prompt working as intended, but it means corrections are not a substitute
+for putting facts in the brief.
+
+Every draft is sent the **whole corpus**, newest first, up to 50 posts — not a
+retrieved subset. Fifty posts is roughly 6,000 tokens, a fraction of a cent on
+the cheap tier, so embeddings would be machinery bought for a problem this size
+does not have. Revisit when one brand has thousands of posts; the schema
+already supports it.
+
 **Drafting.** `/draft <brief>` writes a post in the brand's voice, stores it at
 status `draft`, and sends it with Approve / Edit / Reject buttons. Nothing is
 published — a human moves every item forward. Each run opens a row in
 `agent_runs` *before* the model is called, so failures are logged too; an
 action log containing only successes is not an action log.
+
+Generation and delivery are separate steps. A draft is written, saved, and the
+run marked succeeded *before* any Telegram send — so a delivery failure cannot
+relabel work that was actually done, and the draft is not lost. The typing
+indicator is best-effort for the same reason: losing a draft because a cosmetic
+call hiccuped would be absurd.
+
+**Editing.** Tapping Edit asks for a rewrite; replying with it replaces the
+body, approves the item, and keeps the agent's original in `feedback`. That
+pair — what was written, and what a person changed it to — is the most
+informative signal the system produces: a rejection says something was wrong,
+an edit says exactly what.
+
+Linking a reply back to its draft is stateless. Telegram carries no payload on
+a reply, only the text of the message being replied to, so the draft's id is
+written into that text as `Ref: xxxxxxxx` and read back out. No pending-edit
+column, no expiry to manage, and two drafts can be edited at once without one
+clobbering the other. Lookups are scoped by organization, so an eight-character
+prefix is unambiguous.
 
 **Approvals.** Inline Approve / Reject buttons write to `content_items` with
 who decided and when, then the buttons are removed so a decision cannot be

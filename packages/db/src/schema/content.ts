@@ -55,10 +55,19 @@ export const contentItem = pgTable(
 		media: jsonb("media").$type<unknown[]>(),
 		status: contentStatus("status").notNull().default("draft"),
 		/**
-		 * Why it was rejected or what was changed. This is the training signal —
-		 * it goes back into the Brain, so it is a first-class column, not a note.
+		 * A human's note: why it was rejected, or what they were going for.
+		 * Free text, for people.
 		 */
 		feedback: text("feedback"),
+		/**
+		 * What the agent wrote, when a human replaced it.
+		 *
+		 * Kept as its own column rather than folded into `feedback` prose: the
+		 * pair (original, corrected) is read back into later prompts, and parsing
+		 * it out of a sentence would break the moment that sentence is reworded.
+		 * Null means the body is still the agent's own words.
+		 */
+		originalBody: text("original_body"),
 		reviewedBy: uuid("reviewed_by").references(() => orgMember.id, {
 			onDelete: "set null",
 		}),

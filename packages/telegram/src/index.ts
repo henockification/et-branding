@@ -10,6 +10,7 @@ export {
 	TelegramError,
 	truncateForTelegram,
 } from "./client.ts";
+export { formatRef, parseRef } from "./edit-ref.ts";
 export {
 	createInviteToken,
 	INVITE_TTL_MINUTES,
@@ -19,7 +20,10 @@ export {
 } from "./invite.ts";
 export { toTelegramSecret } from "./secret.ts";
 export type {
+	ForceReplyMarkup,
 	InlineKeyboardButton,
+	InlineKeyboardMarkup,
+	MessageOrigin,
 	ReplyMarkup,
 	TelegramCallbackQuery,
 	TelegramChat,
@@ -27,3 +31,4 @@ export type {
 	TelegramUpdate,
 	TelegramUser,
 } from "./types.ts";
+export { isForwarded, messageText } from "./types.ts";

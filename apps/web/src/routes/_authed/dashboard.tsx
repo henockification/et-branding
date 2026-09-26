@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
@@ -140,6 +140,11 @@ function Dashboard() {
 								<p className="type-caption text-muted-foreground">
 									{org.brandSummary ??
 										"No brand summary yet — the Brain is empty."}
+								</p>
+								<p className="mt-2 type-caption">
+									<Link to="/workspace/$orgId" params={{ orgId: org.id }}>
+										Edit brand brain
+									</Link>
 								</p>
 								{org.role === "member" ? null : <InviteButton orgId={org.id} />}
 							</li>

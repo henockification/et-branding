@@ -3,7 +3,16 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "./schema/index.ts";
 
-export { and, asc, desc, eq, or, sql } from "drizzle-orm";
+export {
+	and,
+	asc,
+	desc,
+	eq,
+	isNotNull,
+	isNull,
+	or,
+	sql,
+} from "drizzle-orm";
 export * from "./schema/index.ts";
 
 export type Database = ReturnType<typeof createDb>;

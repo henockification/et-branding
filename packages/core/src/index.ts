@@ -7,6 +7,16 @@
  * web app needs it for form and request payloads.
  */
 
+export {
+	type BrandAudience,
+	type BrandProfileInput,
+	type BrandServices,
+	type BrandVoice,
+	brandProfileInputSchema,
+	linesToList,
+	listToLines,
+	profileCompleteness,
+} from "./brand-profile.ts";
 export type { Branding } from "./branding.ts";
 export { BRANDING, LOGO, LOGO_RULES } from "./branding.ts";
 export type { Language, LanguageCode } from "./languages.ts";

@@ -9,13 +9,20 @@ import {
 } from "@et/db";
 import {
 	escapeHtml,
+	formatRef,
+	isForwarded,
+	messageText,
 	parseCallbackData,
+	parseRef,
+	type TelegramMessage,
 	type TelegramUpdate,
 	truncateForTelegram,
 	verifyInviteToken,
 } from "@et/telegram";
+import { capturePastPost, describeBrain } from "#/server/telegram/capture";
 import { getTelegram, inviteSecret } from "#/server/telegram/client";
 import { handleDraftCommand } from "#/server/telegram/draft";
+import { handleEditSubmission, promptForEdit } from "#/server/telegram/edit";
 
 /** A linked Telegram user, resolved to their membership. */
 type Member = {
@@ -47,8 +54,14 @@ const HELP = [
 	"<b>What I can do</b>",
 	"",
 	"/draft &lt;what it is about&gt; — write a post for review",
+	"/brain — what I know about your brand",
+	"/remember &lt;a past post&gt; — paste one in so I learn the voice",
 	"/whoami — which workspace you are linked to",
 	"/help — this message",
+	"",
+	"<b>Forward me your best past posts.</b> No command needed — I keep them and write like them.",
+	"",
+	"Tap <b>Edit</b> on a draft and reply with your version — I save what you changed so the writing gets closer each time.",
 	"",
 	"Nothing I write is published. Every draft waits for a human to approve, edit or reject it.",
 ].join("\n");
@@ -68,12 +81,14 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
 		}
 
 		const message = update.message;
-		if (!message?.text || !message.from || message.from.is_bot) return;
+		const text = message ? messageText(message) : undefined;
+		if (!message || !text || !message.from || message.from.is_bot) return;
 
 		await handleMessage({
 			chatId: message.chat.id,
 			from: message.from,
-			text: message.text.trim(),
+			text: text.trim(),
+			message,
 		});
 	} catch (error) {
 		console.error("telegram update failed", error);
@@ -84,6 +99,7 @@ async function handleMessage(input: {
 	chatId: number;
 	from: { id: number; first_name: string; username?: string };
 	text: string;
+	message: TelegramMessage;
 }): Promise<void> {
 	const telegram = getTelegram();
 	const [command, ...rest] = input.text.split(/\s+/);
@@ -104,7 +120,63 @@ async function handleMessage(input: {
 		return;
 	}
 
+	// A reply to a message carrying a draft reference is a rewrite of that
+	// draft. Checked first: the corrected post is arbitrary text and could
+	// otherwise look like a command or a forward.
+	const repliedTo = input.message.reply_to_message;
+	const ref = repliedTo ? parseRef(messageText(repliedTo)) : null;
+	if (ref) {
+		await handleEditSubmission({
+			orgId: member.orgId,
+			memberId: member.memberId,
+			memberRole: member.role,
+			chatId: input.chatId,
+			ref,
+			corrected: input.text,
+		});
+		return;
+	}
+
+	// A forwarded message is an unambiguous "learn from this", so it needs no
+	// command. Typed text does, or every "ok" in the chat becomes training data.
+	if (isForwarded(input.message)) {
+		await capturePastPost({
+			orgId: member.orgId,
+			chatId: input.chatId,
+			message: input.message,
+			text: input.text,
+			forwarded: true,
+		});
+		return;
+	}
+
 	switch (command) {
+		case "/remember":
+			await capturePastPost({
+				orgId: member.orgId,
+				chatId: input.chatId,
+				message: input.message,
+				text: argument,
+				forwarded: false,
+			});
+			return;
+
+		case "/brain": {
+			const [profile] = await getDb()
+				.select({ name: brandProfile.name, summary: brandProfile.summary })
+				.from(brandProfile)
+				.where(eq(brandProfile.orgId, member.orgId))
+				.limit(1);
+
+			await describeBrain({
+				orgId: member.orgId,
+				chatId: input.chatId,
+				brandName: profile?.name ?? member.orgName,
+				hasProfile: Boolean(profile?.summary),
+			});
+			return;
+		}
+
 		case "/draft":
 			await handleDraftCommand({
 				orgId: member.orgId,
@@ -276,9 +348,10 @@ async function handleCallback(query: {
 	}
 
 	if (parsed.action === "edit") {
-		await telegram.answerCallbackQuery({
-			callbackQueryId: query.id,
-			text: "Send the corrected version as a reply — coming next.",
+		await telegram.answerCallbackQuery({ callbackQueryId: query.id });
+		await promptForEdit({
+			chatId: query.message.chat.id,
+			ref: formatRef(item.id),
 		});
 		return;
 	}
