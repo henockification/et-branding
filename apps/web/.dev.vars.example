@@ -32,6 +32,16 @@ GOOGLE_CLIENT_SECRET=""
 EMAIL_FROM=""
 EMAIL_REPLY_TO=""
 
+# --- Telegram -------------------------------------------------------------
+# The bot is the product's main interface. Create one with @BotFather.
+TELEGRAM_BOT_TOKEN=""
+# Username without the @, so invites render as one-tap t.me links.
+TELEGRAM_BOT_USERNAME=""
+# Echoed by Telegram on every update and checked by the webhook. Leave empty to
+# reuse BETTER_AUTH_SECRET — the webhook URL is public, so this check is the
+# only thing separating real updates from anyone who guesses the path.
+TELEGRAM_WEBHOOK_SECRET=""
+
 # --- Model providers ------------------------------------------------------
 # Only the providers you use need a key — the registry fails per-provider, not
 # at startup. DeepSeek is the cheapest tool-capable provider and backs the

@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // Renaming the product means renaming this Worker too — see
   // packages/core/src/branding.ts.
-  "name": "et-branding",
+  "name": "negarit-branding",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",

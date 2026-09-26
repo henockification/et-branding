@@ -35,6 +35,9 @@ importers:
       '@et/email':
         specifier: workspace:*
         version: link:../../packages/email
+      '@et/telegram':
+        specifier: workspace:*
+        version: link:../../packages/telegram
       '@t3-oss/env-core':
         specifier: ^0.13.10
         version: 0.13.11(typescript@6.0.3)(zod@4.6.5)
@@ -226,6 +229,15 @@ importers:
       '@et/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.4
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.3
+
+  packages/telegram:
     devDependencies:
       '@types/node':
         specifier: ^22.10.2

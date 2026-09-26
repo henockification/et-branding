@@ -1,4 +1,4 @@
-# ET Branding
+# Negarit Branding
 
 A pnpm + Turborepo monorepo: a TanStack Start web app on Cloudflare Workers,
 Neon Postgres via Drizzle, and a provider-agnostic TypeScript agent layer.
@@ -79,15 +79,21 @@ hangs off `user.id` from its own tables, which is why `brand` is separate.
 
 ## Branding
 
-The identity comes from the ET Branding design system (vendored at
+The identity comes from the design system (vendored at
 [docs/brand/brand-book.md](docs/brand/brand-book.md) and
 [docs/brand/tokens.json](docs/brand/tokens.json)). Treat those as the source of
 truth and copy values exactly rather than re-deriving them.
 
 `packages/core/src/branding.ts` holds the name, tagline, description, theme
-colour and the logo paths. "ET Branding" is a working name — the mark contains
-no letters precisely so the name can change without redrawing it. A rename is
-that file plus the `name` in `apps/web/wrangler.jsonc` (the Worker's identity).
+colour and the logo paths. The product was renamed from "ET Branding" to
+"Negarit Branding" by editing that file and the `name` in
+`apps/web/wrangler.jsonc` (the Worker's identity) — the mark itself needed no
+change, because it contains no letters. The vendored `docs/brand/` snapshot
+still carries the old working name; update it at the design-system source.
+
+The internal package scope is still `@et/*` and the repository is still
+`et-branding`. Both are private to the codebase and can be renamed whenever
+it's convenient.
 
 The mark is **Social Brain**: two hemispheres (the AI), a speech-bubble tail
 (the conversation), a three-node share shape and a lime notification dot
@@ -149,6 +155,41 @@ Cost control, in order of leverage:
 Catalog prices are indicative and stamped with `pricedOn`. Check them against
 the provider's pricing page before quoting a number to anyone.
 
+## The Telegram bot
+
+The bot is the product's main interface — Ethiopian businesses live on
+Telegram, and the web app is the admin surface, not the daily one.
+
+```bash
+# once you have a token from @BotFather, in apps/web:
+pnpm --filter @et/web telegram:webhook https://your-deployment-url
+```
+
+Telegram requires HTTPS, so the webhook cannot point at localhost. Develop
+against a deployed preview, or drive the endpoint directly — every handler is
+reachable by POSTing an Update to `/api/telegram/webhook` with the right
+secret header, which is how the flows below were verified without a bot.
+
+**Security.** The webhook URL is public, so the shared secret Telegram echoes
+in `X-Telegram-Bot-Api-Secret-Token` is the only thing separating real updates
+from anyone who guesses the path. It is compared in constant time, and falls
+back to `BETTER_AUTH_SECRET` so the bot is never accidentally left open. The
+handler always answers 200 once the secret checks out: a non-200 makes Telegram
+retry, and retrying an update that triggered a bug just repeats the bug.
+
+**Linking.** `/start <invite>` attaches a Telegram account to a workspace. The
+invite is a signed token, not a database row — Telegram caps deep-link payloads
+at 64 characters, so it packs the org id, an expiry and a truncated HMAC into
+30 bytes of base64url (40 characters). That means no invite table, no cleanup
+job, and no forging a link by guessing an org id. Owners and approvers mint
+them from the dashboard; they last 24 hours.
+
+**Approvals.** Inline Approve / Reject buttons write to `content_items` with
+who decided and when, then the buttons are removed so a decision cannot be
+double-submitted. Callback payloads are client-supplied, so every lookup is
+scoped by `org_id` as well as id — otherwise one workspace could act on
+another's draft.
+
 ## Email
 
 Cloudflare Email Service through the Workers `send_email` binding — no API key,
@@ -186,10 +227,44 @@ pnpm --filter @et/db db:migrate    # apply migrations
 pnpm --filter @et/db db:studio     # browse the data
 ```
 
-`packages/db/src/schema/` holds Better Auth's tables plus `brand`. Ownership is
-a plain `ownerId` on `brand`: one user owns many brands, and adding teams later
-means adding a `brand_member` table alongside it rather than reworking what a
-brand belongs to. Neon branches are cheap — give each environment its own.
+`packages/db/src/schema/` holds Better Auth's tables plus the domain model:
+`organizations`, `org_members`, `brand_profiles`, `brand_documents` +
+`brand_document_chunks`, `events`, `content_items`, `agent_runs` and
+`integrations`.
+
+**Every domain table carries `org_id`**, with one client and from day one.
+Retrofitting multi-tenancy once there is real data means touching every query
+and every index at the same time. Reads start from who is asking — membership
+first, never an org id handed over by the client.
+
+`org_members` carries two identities, either or both: `user_id` is a Better
+Auth account (the admin page), `telegram_user_id` is how the client's team
+actually shows up. Someone who starts on Telegram and later gets a web login
+keeps one membership row instead of becoming two people.
+
+`agent_runs` is the action log and the cost ledger at once — spend is
+attributable per organization from the first run instead of reconstructed from
+a provider invoice. `usd` is `numeric`, not a float: sub-cent amounts summed
+over thousands of runs is exactly where binary floating point drifts.
+
+Neon branches are cheap — give each environment its own.
+
+### The Brand Brain
+
+`brand_profiles` is the structured half (voice, audience, services);
+`brand_documents` + `brand_document_chunks` is the unstructured half — the
+client's best past posts, guidelines and press releases, which is what makes
+the voice sound like them rather than like a model.
+
+Chunks are embedded, not whole documents: a press release is far longer than
+the span that answers a retrieval query. `org_id` is denormalised onto chunks
+so a similarity search filters by tenant without joining back. The index is
+HNSW with cosine distance, which can be built before there are enough rows for
+ivfflat to train.
+
+Embeddings are OpenAI `text-embedding-3-small` at 1536 dimensions. That number
+is part of the column type — changing model means changing the column and
+re-embedding everything.
 
 ## Deployment
 

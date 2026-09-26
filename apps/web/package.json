@@ -15,7 +15,8 @@
     "check": "biome check",
     "typecheck": "tsc --noEmit",
     "deploy": "pnpm run build && wrangler deploy",
-    "predev": "node scripts/link-env.mjs"
+    "predev": "node scripts/link-env.mjs",
+    "telegram:webhook": "node --env-file=.env --experimental-strip-types scripts/set-webhook.ts"
   },
   "dependencies": {
     "@et/agents": "workspace:*",
@@ -23,6 +24,7 @@
     "@et/core": "workspace:*",
     "@et/db": "workspace:*",
     "@et/email": "workspace:*",
+    "@et/telegram": "workspace:*",
     "@t3-oss/env-core": "^0.13.10",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",

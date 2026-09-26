@@ -4,40 +4,91 @@ import { useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
-import { createBrand, listBrands } from "#/server/brands";
+import { createTelegramInvite } from "#/server/invites";
+import { createOrganization, listOrganizations } from "#/server/organizations";
 
 export const Route = createFileRoute("/_authed/dashboard")({
-	loader: () => listBrands(),
+	loader: () => listOrganizations(),
 	component: Dashboard,
 });
+
+/**
+ * Mints a Telegram invite on demand rather than showing a standing link: the
+ * token is short-lived, so one rendered at page load would often be stale by
+ * the time anyone sent it.
+ */
+function InviteButton({ orgId }: { orgId: string }) {
+	const invite = useMutation({
+		mutationFn: () => createTelegramInvite({ data: { orgId } }),
+	});
+
+	return (
+		<div className="mt-brand-4 space-y-2">
+			<Button
+				variant="secondary"
+				size="sm"
+				onClick={() => invite.mutate()}
+				disabled={invite.isPending}
+			>
+				{invite.isPending ? "Creating…" : "Invite to Telegram"}
+			</Button>
+
+			{invite.isError ? (
+				<p className="type-caption text-destructive">{invite.error.message}</p>
+			) : null}
+
+			{invite.data ? (
+				<div className="space-y-1">
+					<p className="type-caption text-muted-foreground">
+						Good for {invite.data.expiresInHours} hours.
+					</p>
+					<code className="block break-all text-xs">
+						{invite.data.link ?? `/start ${invite.data.token}`}
+					</code>
+					{invite.data.link ? null : (
+						<p className="type-caption text-muted-foreground">
+							Set TELEGRAM_BOT_USERNAME to get a one-tap link instead of a
+							command.
+						</p>
+					)}
+				</div>
+			) : null}
+		</div>
+	);
+}
 
 function Dashboard() {
 	const { user } = Route.useRouteContext();
 	const queryClient = useQueryClient();
 
-	const brands = useQuery({
-		queryKey: ["brands"],
-		queryFn: () => listBrands(),
+	const organizations = useQuery({
+		queryKey: ["organizations"],
+		queryFn: () => listOrganizations(),
 		initialData: Route.useLoaderData(),
 	});
 
 	const [name, setName] = useState("");
 
 	const create = useMutation({
-		mutationFn: (value: string) => createBrand({ data: { name: value } }),
+		mutationFn: (value: string) =>
+			createOrganization({ data: { name: value } }),
 		onSuccess: () => {
 			setName("");
-			queryClient.invalidateQueries({ queryKey: ["brands"] });
+			queryClient.invalidateQueries({ queryKey: ["organizations"] });
 		},
 	});
 
 	return (
 		<main className="page-wrap space-y-brand-12 py-brand-12">
 			<header className="space-y-2">
-				<p className="type-label text-brand">Your brands</p>
+				<p className="type-label text-brand">Workspaces</p>
 				<h1 className="type-display-l">
-					{user.name ? `Hello, ${user.name}` : "Your brands"}
+					{user.name ? `Hello, ${user.name}` : "Your workspaces"}
 				</h1>
+				<p className="type-body max-w-prose text-muted-foreground">
+					Each workspace is one organization with one brand. The agent team
+					works inside a workspace, and everything it produces belongs to it.
+				</p>
 			</header>
 
 			<section className="space-y-brand-4">
@@ -49,9 +100,9 @@ function Dashboard() {
 					}}
 				>
 					<div className="min-w-56 flex-1 space-y-2">
-						<Label htmlFor="brand-name">Add a brand</Label>
+						<Label htmlFor="org-name">Add a workspace</Label>
 						<Input
-							id="brand-name"
+							id="org-name"
 							value={name}
 							placeholder="Bunna Coffee"
 							maxLength={80}
@@ -59,7 +110,7 @@ function Dashboard() {
 						/>
 					</div>
 					<Button type="submit" disabled={create.isPending || !name.trim()}>
-						{create.isPending ? "Adding…" : "Add brand"}
+						{create.isPending ? "Adding…" : "Add workspace"}
 					</Button>
 				</form>
 
@@ -71,19 +122,26 @@ function Dashboard() {
 			</section>
 
 			<section>
-				{brands.data.length === 0 ? (
+				{organizations.data.length === 0 ? (
 					<p className="type-body text-muted-foreground">
-						No brands yet. Add one above and the agent team has something to
+						No workspaces yet. Add one above and the agent team has a brand to
 						work on.
 					</p>
 				) : (
 					<ul className="grid gap-brand-4 sm:grid-cols-2">
-						{brands.data.map((item) => (
-							<li key={item.id} className="rounded-lg border bg-card p-brand-6">
-								<h2 className="type-title">{item.name}</h2>
+						{organizations.data.map((org) => (
+							<li key={org.id} className="rounded-lg border bg-card p-brand-6">
+								<div className="flex items-start justify-between gap-2">
+									<h2 className="type-title">{org.brandName ?? org.name}</h2>
+									<span className="type-label text-muted-foreground">
+										{org.role}
+									</span>
+								</div>
 								<p className="type-caption text-muted-foreground">
-									{item.summary ?? "No summary yet."}
+									{org.brandSummary ??
+										"No brand summary yet — the Brain is empty."}
 								</p>
+								{org.role === "member" ? null : <InviteButton orgId={org.id} />}
 							</li>
 						))}
 					</ul>

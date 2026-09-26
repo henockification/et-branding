@@ -18,6 +18,7 @@ import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as AuthedDashboardRouteImport } from './routes/_authed/dashboard'
 import { Route as DevHealthRouteImport } from './routes/dev/health'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiTelegramWebhookRouteImport } from './routes/api/telegram/webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -63,6 +64,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTelegramWebhookRoute = ApiTelegramWebhookRouteImport.update({
+  id: '/api/telegram/webhook',
+  path: '/api/telegram/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthedDashboardRoute
   '/dev/health': typeof DevHealthRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthedDashboardRoute
   '/dev/health': typeof DevHealthRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/_authed/dashboard': typeof AuthedDashboardRoute
   '/dev/health': typeof DevHealthRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dev/health'
     | '/api/auth/$'
+    | '/api/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dev/health'
     | '/api/auth/$'
+    | '/api/telegram/webhook'
   id:
     | '__root__'
     | '/'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/_authed/dashboard'
     | '/dev/health'
     | '/api/auth/$'
+    | '/api/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -139,6 +151,7 @@ export interface RootRouteChildren {
   SignUpRoute: typeof SignUpRoute
   DevHealthRoute: typeof DevHealthRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiTelegramWebhookRoute: typeof ApiTelegramWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/telegram/webhook': {
+      id: '/api/telegram/webhook'
+      path: '/api/telegram/webhook'
+      fullPath: '/api/telegram/webhook'
+      preLoaderRoute: typeof ApiTelegramWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -229,6 +249,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignUpRoute: SignUpRoute,
   DevHealthRoute: DevHealthRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiTelegramWebhookRoute: ApiTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

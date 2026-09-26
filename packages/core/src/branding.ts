@@ -1,18 +1,20 @@
 /**
  * Everything the product is called and the identity it ships with, in one
- * place. Values come from the ET Branding design system.
+ * place. Values come from the design system in docs/brand.
  *
- * "ET Branding" is a working name: the identity was deliberately built so the
- * name can change without touching the mark, which has no letters in it. When
- * the rename comes, edit this file and the `name` field in
- * apps/web/wrangler.jsonc (the Worker's identity, which must match the
- * deployed service). Nothing else in the app hard-codes the name.
+ * The product was renamed from "ET Branding" to "Negarit Branding" by editing
+ * this file and the `name` in apps/web/wrangler.jsonc (the Worker's identity,
+ * which must match the deployed service). The mark needed no change at all —
+ * it has no letters in it, which is exactly why it was drawn that way.
+ *
+ * Note: docs/brand/ is a faithful snapshot of the design system artifact and
+ * still carries the old working name. Update it at the source, not here.
  */
 export const BRANDING = {
 	/** Full product name, used in titles and the wordmark. */
-	name: "ET Branding",
+	name: "Negarit Branding",
 	/** Short form for tight spaces. */
-	shortName: "ET",
+	shortName: "Negarit",
 	/** One line, in the brand voice: outcomes, not AI for its own sake. */
 	tagline: "Launch a brand. Grow it everywhere.",
 	/** What the product actually is, for meta description and hero copy. */
