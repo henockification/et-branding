@@ -36,7 +36,7 @@ export const runSmokeAgent = createServerFn({ method: "POST" })
 export const listModels = createServerFn({ method: "GET" }).handler(async () =>
 	listModelSpecs().map((spec) => ({
 		id: spec.id,
-		provider: spec.provider,
+		vendor: spec.vendor,
 		usdPerMillionInput: spec.usdPerMillionInput,
 		usdPerMillionOutput: spec.usdPerMillionOutput,
 		notes: spec.notes ?? null,

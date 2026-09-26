@@ -13,10 +13,8 @@
     "lint": "biome lint src"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.63",
-    "@ai-sdk/deepseek": "^3.0.52",
-    "@ai-sdk/openai": "^4.0.75",
     "@et/core": "workspace:*",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
     "ai": "^7.0.114",
     "zod": "^4.3.6"
   },

@@ -121,11 +121,18 @@ Chart tokens are placeholders. Design a real palette alongside the first chart.
 
 ## How agents pick a model
 
-Agents never name a model. They declare a **tier** — `cheap`, `balanced` or
-`premium` — and `packages/agents/src/models/registry.ts` resolves it through the
-catalog in `models/catalog.ts`. That is the only file that knows DeepSeek,
-OpenAI or Anthropic exist, so adding a provider or re-pointing a tier at a
-cheaper model is a one-file change with no edits to agent code.
+Every model call goes through **OpenRouter** — one key, one bill, any vendor.
+`OPENROUTER_API_KEY` is the only model credential.
+
+Agents never name a model. They declare a **tier** — `free`, `cheap`,
+`balanced` or `premium` — and `packages/agents/src/models/registry.ts` resolves
+it through the catalog in `models/catalog.ts`. That is the only file that names
+a model, so re-pointing a tier is a one-file change with no edits to agent code.
+
+Measured on 2026-09-26, `cheap` (`deepseek/deepseek-v4-flash`) answers a short
+caption request for about **$0.00001** — roughly 100,000 calls per dollar. The
+`free` tier exists but is rate-limited upstream and failed outright in testing;
+at those prices it is not worth the unreliability.
 
 ```ts
 import { defineAgent } from '@et/agents'
@@ -142,8 +149,8 @@ console.log(output, cost.usd)
 
 Cost control, in order of leverage:
 
-1. **Tier defaults are cheap-first.** `cheap` and `balanced` both resolve to
-   DeepSeek; only `premium` reaches for a frontier model. Promote an agent to
+1. **Tier defaults are cheap-first.** `cheap` and `balanced` are both DeepSeek
+   models; only `premium` reaches for a frontier model. Promote an agent to
    `premium` only after a cheaper tier has visibly failed at the job.
 2. **Every call reports its own cost.** `run()` returns a `CallCost`, so spend
    is measurable per agent rather than guessed at from a monthly invoice.
@@ -152,8 +159,33 @@ Cost control, in order of leverage:
 4. **`ET_DEFAULT_MODEL`** overrides every tier at once — the quick way to price
    a whole workflow on a different provider without touching code.
 
-Catalog prices are indicative and stamped with `pricedOn`. Check them against
-the provider's pricing page before quoting a number to anyone.
+Catalog prices come from OpenRouter's live catalogue and are stamped with
+`pricedOn`. They move — re-check `https://openrouter.ai/api/v1/models` before
+quoting a figure to anyone.
+
+### Amharic is switched off
+
+`packages/core/src/languages.ts` decides which languages agents may write in.
+Amharic is `enabled: false` pending a quality review with the client and a
+decision on its cost. Turning it on is that one flag — the database's
+`content_language` enum already accepts `"am"`, so no migration is needed, and
+every surface reads the list rather than hard-coding a language.
+
+### Amharic costs more than English
+
+The same request in Amharic used **3.6x the input tokens** and produced far more
+output than its English twin, making a bilingual post roughly **6–8x** the cost
+of an English one on the same model. Ge'ez script tokenizes poorly, so this is
+structural, not a one-off. It is still fractions of a cent per post, but it
+compounds at volume and should inform any per-client budget.
+
+### Embeddings are not on OpenRouter
+
+OpenRouter serves no embedding models — zero of 458 in its catalogue. The Brand
+Brain's document search needs a separate provider: OpenAI directly, or
+Cloudflare Workers AI through a Worker binding, which adds no new vendor and has
+multilingual models. Not wired up yet; the choice changes the embedding column
+width, so it is cheaper to settle before loading documents.
 
 ## The Telegram bot
 
@@ -183,6 +215,12 @@ at 64 characters, so it packs the org id, an expiry and a truncated HMAC into
 30 bytes of base64url (40 characters). That means no invite table, no cleanup
 job, and no forging a link by guessing an org id. Owners and approvers mint
 them from the dashboard; they last 24 hours.
+
+**Drafting.** `/draft <brief>` writes a post in the brand's voice, stores it at
+status `draft`, and sends it with Approve / Edit / Reject buttons. Nothing is
+published — a human moves every item forward. Each run opens a row in
+`agent_runs` *before* the model is called, so failures are logged too; an
+action log containing only successes is not an action log.
 
 **Approvals.** Inline Approve / Reject buttons write to `content_items` with
 who decided and when, then the buttons are removed so a decision cannot be

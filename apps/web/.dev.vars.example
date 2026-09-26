@@ -42,14 +42,15 @@ TELEGRAM_BOT_USERNAME=""
 # only thing separating real updates from anyone who guesses the path.
 TELEGRAM_WEBHOOK_SECRET=""
 
-# --- Model providers ------------------------------------------------------
-# Only the providers you use need a key — the registry fails per-provider, not
-# at startup. DeepSeek is the cheapest tool-capable provider and backs the
-# cheap and balanced tiers.
-DEEPSEEK_API_KEY=""
-ANTHROPIC_API_KEY=""
-OPENAI_API_KEY=""
+# --- Models ---------------------------------------------------------------
+# Every model call goes through OpenRouter: one key, one bill, any vendor.
+# Create a key at https://openrouter.ai/keys
+OPENROUTER_API_KEY=""
 
-# Optional: force every agent tier onto one catalog model to compare providers.
-# Must be an id from packages/agents/src/models/catalog.ts.
-# ET_DEFAULT_MODEL=""
+# NOTE: OpenRouter serves no embedding models, so the Brand Brain's document
+# search needs a separate provider. Not wired up yet.
+
+# Optional: force every agent tier onto one catalog model — useful to pin
+# everything to the free model while testing. Must be an id from
+# packages/agents/src/models/catalog.ts.
+# ET_DEFAULT_MODEL="qwen/qwen3.8-27b:free"

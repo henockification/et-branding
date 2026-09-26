@@ -9,3 +9,11 @@
 
 export type { Branding } from "./branding.ts";
 export { BRANDING, LOGO, LOGO_RULES } from "./branding.ts";
+export type { Language, LanguageCode } from "./languages.ts";
+export {
+	defaultLanguage,
+	enabledLanguages,
+	isLanguageCode,
+	isLanguageEnabled,
+	LANGUAGES,
+} from "./languages.ts";

@@ -15,6 +15,7 @@ import {
 	verifyInviteToken,
 } from "@et/telegram";
 import { getTelegram, inviteSecret } from "#/server/telegram/client";
+import { handleDraftCommand } from "#/server/telegram/draft";
 
 /** A linked Telegram user, resolved to their membership. */
 type Member = {
@@ -45,10 +46,11 @@ async function findMember(telegramUserId: number): Promise<Member | null> {
 const HELP = [
 	"<b>What I can do</b>",
 	"",
+	"/draft &lt;what it is about&gt; — write a post for review",
 	"/whoami — which workspace you are linked to",
 	"/help — this message",
 	"",
-	"Drafting and approvals arrive next. Everything I write goes to a human before it goes anywhere else.",
+	"Nothing I write is published. Every draft waits for a human to approve, edit or reject it.",
 ].join("\n");
 
 /**
@@ -103,6 +105,14 @@ async function handleMessage(input: {
 	}
 
 	switch (command) {
+		case "/draft":
+			await handleDraftCommand({
+				orgId: member.orgId,
+				chatId: input.chatId,
+				brief: argument,
+			});
+			return;
+
 		case "/help":
 			await telegram.sendMessage({ chatId: input.chatId, text: HELP });
 			return;

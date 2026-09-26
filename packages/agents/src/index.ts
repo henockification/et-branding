@@ -1,3 +1,9 @@
+export {
+	type BrandContext,
+	type Draft,
+	type DraftRequest,
+	draftPost,
+} from "./agents/content.ts";
 export type { CallCost } from "./cost.ts";
 export { estimateCost, formatUsd, sumCosts } from "./cost.ts";
 export type {
@@ -10,7 +16,7 @@ export type {
 	ModelId,
 	ModelSpec,
 	ModelTier,
-	ProviderId,
+	Vendor,
 } from "./models/catalog.ts";
 export {
 	getModelSpec,
