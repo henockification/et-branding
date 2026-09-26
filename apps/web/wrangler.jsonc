@@ -5,7 +5,11 @@
   "name": "negarit-branding",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry",
+  // Our own entry, not Start's default: Start exports only `fetch`, and cron
+  // triggers are delivered to `scheduled`. See src/worker.ts.
+  "main": "src/worker.ts",
+  // Monday 06:00 UTC is 09:00 in Addis — the plan lands before the week starts.
+  "triggers": { "crons": ["0 6 * * 1"] },
   "observability": {
     "enabled": true
   },

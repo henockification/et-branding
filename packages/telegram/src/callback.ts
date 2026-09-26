@@ -5,14 +5,39 @@
  * base64url'd (22 chars) rather than as 36 characters of text.
  */
 
-export const CALLBACK_ACTIONS = ["approve", "reject", "edit"] as const;
+export const CALLBACK_ACTIONS = [
+	"approve",
+	"reject",
+	"edit",
+	// Refinements: the agent has another go at the same draft.
+	"again",
+	"shorter",
+	"cta",
+	// Disambiguation, offered when pasted text is long enough to be a past post.
+	"draft_this",
+	"remember_this",
+] as const;
 export type CallbackAction = (typeof CALLBACK_ACTIONS)[number];
 
+/** Single characters, because the payload budget is 64 bytes including the id. */
 const PREFIX: Record<CallbackAction, string> = {
 	approve: "a",
 	reject: "r",
 	edit: "e",
+	again: "g",
+	shorter: "s",
+	cta: "c",
+	draft_this: "d",
+	remember_this: "m",
 };
+
+/** Refinements ask the agent to rewrite; they are not human decisions. */
+export const REFINEMENTS = ["again", "shorter", "cta"] as const;
+export type Refinement = (typeof REFINEMENTS)[number];
+
+export function isRefinement(action: CallbackAction): action is Refinement {
+	return (REFINEMENTS as readonly string[]).includes(action);
+}
 
 const ACTION_BY_PREFIX = Object.fromEntries(
 	Object.entries(PREFIX).map(([action, prefix]) => [prefix, action]),

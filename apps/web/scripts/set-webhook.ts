@@ -61,6 +61,26 @@ async function call<T>(
 const me = await call<{ username: string }>("getMe");
 console.log(`Bot: @${me.username}`);
 
+/**
+ * The list behind Telegram's blue Menu button, and the suggestions shown when
+ * someone types "/". Nothing was registered before, so that menu was empty and
+ * every command had to be memorised.
+ *
+ * Descriptions are plain text — Telegram does not parse HTML here.
+ */
+await call("setMyCommands", {
+	commands: [
+		{ command: "draft", description: "Write a post" },
+		{ command: "plan", description: "This week's posts" },
+		{ command: "brain", description: "What I know about your brand" },
+		{ command: "remember", description: "Save a past post so I learn the voice" },
+		{ command: "whoami", description: "Which workspace you are linked to" },
+		{ command: "help", description: "What I can do" },
+		{ command: "start", description: "Link this chat to a workspace" },
+	],
+});
+console.log("Commands registered.");
+
 await call("setWebhook", {
 	url,
 	secret_token: secret,

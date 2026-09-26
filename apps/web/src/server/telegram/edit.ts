@@ -112,6 +112,95 @@ export async function handleEditSubmission(
 }
 
 /**
+ * Records why a draft was thrown out.
+ *
+ * The rejection itself already happened — this only attaches the reason. A
+ * rejection with no explanation is still a valid rejection; it just teaches
+ * the agents nothing, which is why the reason is asked for but never required.
+ */
+export async function handleRejectionReason(input: {
+	orgId: string;
+	memberRole: "owner" | "approver" | "member";
+	chatId: number;
+	ref: string;
+	reason: string;
+}): Promise<void> {
+	const telegram = getTelegram();
+	const db = getDb();
+	const reason = input.reason.trim().slice(0, 1000);
+
+	if (input.memberRole === "member") {
+		await telegram.sendMessage({
+			chatId: input.chatId,
+			text: "Only an owner or approver can review drafts.",
+		});
+		return;
+	}
+
+	if (reason.length < 3) {
+		await telegram.sendMessage({
+			chatId: input.chatId,
+			text: "A word or two more would help me avoid it next time.",
+		});
+		return;
+	}
+
+	const [item] = await db
+		.select({ id: contentItem.id })
+		.from(contentItem)
+		.where(
+			and(
+				eq(contentItem.orgId, input.orgId),
+				sql`replace(${contentItem.id}::text, '-', '') like ${`${input.ref}%`}`,
+			),
+		)
+		.limit(1);
+
+	if (!item) {
+		await telegram.sendMessage({
+			chatId: input.chatId,
+			text: "I cannot find that draft any more.",
+		});
+		return;
+	}
+
+	await db
+		.update(contentItem)
+		.set({ feedback: reason, updatedAt: new Date() })
+		.where(eq(contentItem.id, item.id));
+
+	await telegram.sendMessage({
+		chatId: input.chatId,
+		text: "Noted. I will avoid that next time.",
+	});
+}
+
+/**
+ * Asks why, after the rejection has already been recorded.
+ *
+ * Optional on purpose: making an explanation mandatory would make rejecting
+ * feel expensive, and people would approve mediocre drafts to avoid the
+ * friction — which is the one outcome that poisons everything downstream.
+ */
+export async function promptForReason(input: {
+	chatId: number;
+	ref: string;
+}): Promise<void> {
+	await getTelegram().sendMessage({
+		chatId: input.chatId,
+		text: [
+			"Rejected. What was wrong with it? Reply here and I will avoid it next time — or ignore this.",
+			"",
+			`<code>${input.ref}</code>`,
+		].join("\n"),
+		replyMarkup: {
+			force_reply: true,
+			input_field_placeholder: "Too formal, wrong facts, …",
+		},
+	});
+}
+
+/**
  * Asks for the rewrite.
  *
  * `force_reply` opens the composer already pointed at this message, so nobody

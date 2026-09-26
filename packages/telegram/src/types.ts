@@ -101,4 +101,32 @@ export type ForceReplyMarkup = {
 	selective?: boolean;
 };
 
-export type ReplyMarkup = InlineKeyboardMarkup | ForceReplyMarkup;
+/**
+ * A button on the persistent keyboard. Tapping it sends its `text` as an
+ * ordinary message — there is no payload, which is why the labels have to be
+ * matched by the router.
+ */
+export type KeyboardButton = {
+	text: string;
+};
+
+/** Verified against the live Bot API: keyboard, resize, persistence, placeholder. */
+export type ReplyKeyboardMarkup = {
+	keyboard: KeyboardButton[][];
+	resize_keyboard?: boolean;
+	is_persistent?: boolean;
+	one_time_keyboard?: boolean;
+	input_field_placeholder?: string;
+	selective?: boolean;
+};
+
+export type ReplyKeyboardRemove = {
+	remove_keyboard: true;
+	selective?: boolean;
+};
+
+export type ReplyMarkup =
+	| InlineKeyboardMarkup
+	| ForceReplyMarkup
+	| ReplyKeyboardMarkup
+	| ReplyKeyboardRemove;

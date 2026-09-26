@@ -29,6 +29,20 @@
       "when": 1790408649157,
       "tag": "0003_foamy_reptil",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790432729411,
+      "tag": "0004_chunky_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790433707671,
+      "tag": "0005_flippant_karma",
+      "breakpoints": true
     }
   ]
 }

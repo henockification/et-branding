@@ -17,6 +17,7 @@ import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as AuthedDashboardRouteImport } from './routes/_authed/dashboard'
 import { Route as DevHealthRouteImport } from './routes/dev/health'
+import { Route as AuthedContentOrgIdRouteImport } from './routes/_authed/content.$orgId'
 import { Route as AuthedWorkspaceOrgIdRouteImport } from './routes/_authed/workspace.$orgId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiTelegramWebhookRouteImport } from './routes/api/telegram/webhook'
@@ -60,6 +61,11 @@ const DevHealthRoute = DevHealthRouteImport.update({
   path: '/dev/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedContentOrgIdRoute = AuthedContentOrgIdRouteImport.update({
+  id: '/content/$orgId',
+  path: '/content/$orgId',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedWorkspaceOrgIdRoute = AuthedWorkspaceOrgIdRouteImport.update({
   id: '/workspace/$orgId',
   path: '/workspace/$orgId',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof SignUpRoute
   '/dashboard': typeof AuthedDashboardRoute
   '/dev/health': typeof DevHealthRoute
+  '/content/$orgId': typeof AuthedContentOrgIdRoute
   '/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/sign-up': typeof SignUpRoute
   '/dashboard': typeof AuthedDashboardRoute
   '/dev/health': typeof DevHealthRoute
+  '/content/$orgId': typeof AuthedContentOrgIdRoute
   '/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/sign-up': typeof SignUpRoute
   '/_authed/dashboard': typeof AuthedDashboardRoute
   '/dev/health': typeof DevHealthRoute
+  '/_authed/content/$orgId': typeof AuthedContentOrgIdRoute
   '/_authed/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
@@ -124,6 +133,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/dashboard'
     | '/dev/health'
+    | '/content/$orgId'
     | '/workspace/$orgId'
     | '/api/auth/$'
     | '/api/telegram/webhook'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/dashboard'
     | '/dev/health'
+    | '/content/$orgId'
     | '/workspace/$orgId'
     | '/api/auth/$'
     | '/api/telegram/webhook'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/_authed/dashboard'
     | '/dev/health'
+    | '/_authed/content/$orgId'
     | '/_authed/workspace/$orgId'
     | '/api/auth/$'
     | '/api/telegram/webhook'
@@ -224,6 +236,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/content/$orgId': {
+      id: '/_authed/content/$orgId'
+      path: '/content/$orgId'
+      fullPath: '/content/$orgId'
+      preLoaderRoute: typeof AuthedContentOrgIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/workspace/$orgId': {
       id: '/_authed/workspace/$orgId'
       path: '/workspace/$orgId'
@@ -250,11 +269,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthedRouteChildren {
   AuthedDashboardRoute: typeof AuthedDashboardRoute
+  AuthedContentOrgIdRoute: typeof AuthedContentOrgIdRoute
   AuthedWorkspaceOrgIdRoute: typeof AuthedWorkspaceOrgIdRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedDashboardRoute: AuthedDashboardRoute,
+  AuthedContentOrgIdRoute: AuthedContentOrgIdRoute,
   AuthedWorkspaceOrgIdRoute: AuthedWorkspaceOrgIdRoute,
 }
 

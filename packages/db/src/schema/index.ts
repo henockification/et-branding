@@ -6,3 +6,4 @@ export * from "./events.ts";
 export * from "./integrations.ts";
 export * from "./organizations.ts";
 export * from "./shared.ts";
+export * from "./telegram.ts";

@@ -3,7 +3,17 @@ export {
 	type Draft,
 	type DraftRequest,
 	draftPost,
+	REFINEMENT_INSTRUCTIONS,
+	type RefinementKind,
+	refinePost,
 } from "./agents/content.ts";
+export {
+	type PlannedPost,
+	planWeek,
+	WEEKDAYS,
+	type WeekPlan,
+	weekStart,
+} from "./agents/weekly-plan.ts";
 export type { CallCost } from "./cost.ts";
 export { estimateCost, formatUsd, sumCosts } from "./cost.ts";
 export type {

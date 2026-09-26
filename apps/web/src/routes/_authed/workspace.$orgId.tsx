@@ -1,6 +1,6 @@
 import { linesToList, listToLines, profileCompleteness } from "@et/core";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
@@ -9,7 +9,11 @@ import { Textarea } from "#/components/ui/textarea";
 import { fetchBrandProfile, saveBrandProfile } from "#/server/brand-profile";
 
 export const Route = createFileRoute("/_authed/workspace/$orgId")({
-	loader: ({ params }) => fetchBrandProfile({ data: { orgId: params.orgId } }),
+	loader: async ({ params }) => {
+		const result = await fetchBrandProfile({ data: { orgId: params.orgId } });
+		if (!result.found) throw notFound();
+		return result;
+	},
 	component: WorkspaceBrand,
 });
 
@@ -72,7 +76,10 @@ function WorkspaceBrand() {
 				</p>
 				<p className="type-caption text-muted-foreground">
 					{progress.filled} of {progress.total} sections filled ·{" "}
-					<Link to="/dashboard">back to workspaces</Link>
+					<Link to="/content/$orgId" params={{ orgId }}>
+						content
+					</Link>{" "}
+					·<Link to="/dashboard"> workspaces</Link>
 				</p>
 			</header>
 

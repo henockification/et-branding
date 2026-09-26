@@ -2,7 +2,10 @@ export {
 	CALLBACK_ACTIONS,
 	type CallbackAction,
 	callbackData,
+	isRefinement,
 	parseCallbackData,
+	REFINEMENTS,
+	type Refinement,
 } from "./callback.ts";
 export {
 	escapeHtml,
@@ -10,7 +13,7 @@ export {
 	TelegramError,
 	truncateForTelegram,
 } from "./client.ts";
-export { formatRef, parseRef } from "./edit-ref.ts";
+export { formatRef, parseRef, type RefKind } from "./edit-ref.ts";
 export {
 	createInviteToken,
 	INVITE_TTL_MINUTES,
@@ -18,12 +21,22 @@ export {
 	inviteLink,
 	verifyInviteToken,
 } from "./invite.ts";
+export {
+	KEYBOARD_ACTIONS,
+	type KeyboardAction,
+	keyboardAction,
+	MAIN_KEYBOARD,
+	normaliseLabel,
+} from "./keyboard.ts";
 export { toTelegramSecret } from "./secret.ts";
 export type {
 	ForceReplyMarkup,
 	InlineKeyboardButton,
 	InlineKeyboardMarkup,
+	KeyboardButton,
 	MessageOrigin,
+	ReplyKeyboardMarkup,
+	ReplyKeyboardRemove,
 	ReplyMarkup,
 	TelegramCallbackQuery,
 	TelegramChat,

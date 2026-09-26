@@ -1,4 +1,5 @@
 import {
+	date,
 	index,
 	jsonb,
 	pgEnum,
@@ -33,6 +34,19 @@ export const contentChannel = pgEnum("content_channel", [
  * edits or rejects every item, and the outcome is written back so the agents
  * learn what this brand accepts.
  */
+/**
+ * Where an item came from.
+ *
+ * Structural, not inferred from prose. The weekly plan used to record itself in
+ * `feedback` — the same column rejection reasons use — so rejecting a planned
+ * post either lost the plan or fed "Planned for Wednesday…" to the model as the
+ * reason it was thrown out.
+ */
+export const contentOrigin = pgEnum("content_origin", [
+	"ad_hoc",
+	"weekly_plan",
+]);
+
 export const contentStatus = pgEnum("content_status", [
 	"draft",
 	"approved",
@@ -48,6 +62,11 @@ export const contentItem = pgTable(
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
 		type: contentType("type").notNull(),
+		origin: contentOrigin("origin").notNull().default("ad_hoc"),
+		/** The day the plan intended this for. Null for anything ad hoc. */
+		plannedFor: date("planned_for"),
+		/** One line on why the plan included it, written by the planner. */
+		angle: text("angle"),
 		channel: contentChannel("channel").notNull(),
 		language: contentLanguage("language").notNull(),
 		body: text("body").notNull(),
@@ -83,6 +102,7 @@ export const contentItem = pgTable(
 		// The approval queue is "everything in this org still waiting".
 		index("content_items_org_status_idx").on(table.orgId, table.status),
 		index("content_items_event_id_idx").on(table.eventId),
+		index("content_items_org_origin_idx").on(table.orgId, table.origin),
 	],
 );
 

@@ -226,6 +226,15 @@ against a deployed preview, or drive the endpoint directly — every handler is
 reachable by POSTing an Update to `/api/telegram/webhook` with the right
 secret header, which is how the flows below were verified without a bot.
 
+**Answering fast.** The webhook claims the `update_id` (a primary key in
+`telegram_updates`, insert-on-conflict-do-nothing), answers 200, and does the
+work in `ctx.waitUntil`. Before this it awaited a 6–15 second draft inside the
+request, and Telegram retries deliveries it considers failed — so a slow draft
+could be generated twice. Telegram does not document its retry rules, which is
+exactly why the claim exists rather than trusting a fast response. The
+`ExecutionContext` reaches the route through async-local storage set in
+`src/worker.ts`, since Start passes only the request through.
+
 **Security.** The webhook URL is public, so the shared secret Telegram echoes
 in `X-Telegram-Bot-Api-Secret-Token` is the only thing separating real updates
 from anyone who guesses the path. It is compared in constant time, and falls
@@ -256,6 +265,7 @@ Three sources, each capped separately, all replayed into the prompt:
 | Past posts (`brand_documents`) | 50 | What the brand sounds like |
 | Approved drafts, untouched | 20 | The agent got these right — capped lower, since they are its own output and it can reinforce its own habits |
 | Corrections (`original_body` → `body`) | 10 | Exactly where it went wrong — capped tightest, so old mistakes do not drown out the voice |
+| Explained rejections | 10 | What to avoid, and why — unexplained ones are skipped |
 
 Corrections come last in the prompt, closest to the brief.
 
@@ -283,6 +293,29 @@ the cheap tier, so embeddings would be machinery bought for a problem this size
 does not have. Revisit when one brand has thousands of posts; the schema
 already supports it.
 
+**Just say what you want.** Plain text is a brief — "we are hiring two camera
+operators" drafts a post, no command required. Slash commands still work as
+aliases, and a persistent button keyboard (Write a post / This week / What you
+know / Help) means nobody has to learn one. The commands are registered with
+`setMyCommands`, so Telegram's Menu button lists them instead of being empty.
+
+Messages that are entirely pleasantries ("ok thanks") are ignored, matched per
+word rather than per phrase — a phrase list let "ok thanks" through and turned
+an acknowledgement into a paid model call. Non-text messages get an honest
+reply rather than the silence they used to get.
+
+**Refinements.** Under every draft: Try again / Shorter / Add a CTA, and you can
+reply to a draft with free text ("mention it is full time"). A refinement
+rewrites the same `content_items` row, logs its own `agent_runs` entry, and
+never touches `original_body` — that field means "what the agent wrote before a
+*human* replaced it", and machine iterations must not be mistaken for human
+signal.
+
+Replying to a draft used to be read as a human rewrite, because draft footers
+and edit prompts both carried `Ref:`. That silently approved the draft and
+recorded a correction nobody made — poisoning the strongest training signal in
+the system. Footers now carry `Draft:` and only the Edit prompt carries `Ref:`.
+
 **Drafting.** `/draft <brief>` writes a post in the brand's voice, stores it at
 status `draft`, and sends it with Approve / Edit / Reject buttons. Nothing is
 published — a human moves every item forward. Each run opens a row in
@@ -308,11 +341,83 @@ column, no expiry to manage, and two drafts can be edited at once without one
 clobbering the other. Lookups are scoped by organization, so an eight-character
 prefix is unambiguous.
 
+**Rejections.** Reject records the decision immediately, then asks why — and
+the answer is optional. Making an explanation mandatory would make rejecting
+feel expensive, and people would approve mediocre drafts to avoid the friction,
+which is the one outcome that poisons everything downstream.
+
+Only rejections with a stated reason reach later prompts. A bare "no" says
+something was wrong without saying what, and a list of unexplained rejections
+would teach the model to avoid their *subjects* rather than their faults.
+
+Both follow-ups use the same stateless reply mechanism, and the label carries
+the intent: `Ref:` after Edit, `Why:` after Reject. Inferring intent from the
+item's status would be guesswork, since the same reply shape means different
+things.
+
 **Approvals.** Inline Approve / Reject buttons write to `content_items` with
 who decided and when, then the buttons are removed so a decision cannot be
 double-submitted. Callback payloads are client-supplied, so every lookup is
 scoped by `org_id` as well as id — otherwise one workspace could act on
 another's draft.
+
+## The content queue
+
+`/content/$orgId` shows every draft, approval, edit and rejection for a
+workspace, filtered by status, with the learning pair visible: what the agent
+wrote and what a human changed it to, side by side.
+
+Items are classified by **origin** — proposed by the weekly plan, or asked for
+with `/draft` — and the two filter independently of status, so "planned posts
+still waiting" is one click. Planned items show the date they were intended for
+and the angle the planner gave them.
+
+That classification is a column, not prose. The weekly plan used to record
+itself in `feedback`, which is the same field rejection reasons use: rejecting
+a planned post would either lose the plan or hand "Planned for Wednesday…" to
+the model as the reason the post was thrown out. `origin`, `planned_for` and
+`angle` are their own columns now, and `feedback` belongs to humans.
+
+Above the list is what the *next* draft will learn from — past posts, clean
+approvals, corrections, explained rejections — because the caps are not
+obvious from the list itself, and four numbers are the quickest way to see why
+drafts are or are not improving. Rejections with no reason are counted
+separately and called out, since they teach nothing.
+
+Read-only on purpose. Approving, editing and rejecting stay in Telegram, where
+whoever is reviewing already is; duplicating those decisions on the web would
+mean two paths to the same state and buttons in Telegram that silently act on
+an item already decided elsewhere.
+
+**Page loaders return, they do not throw.** A thrown `Response` is right for a
+mutation, but a loader that throws one escapes as an unhandled 500 and the
+visitor sees raw JSON instead of the app — which is exactly what happened here
+before it was caught. Read paths return `{ found: false }` and the route turns
+that into the app's own not-found page. "Not a member" and "no such workspace"
+are the same answer, so a response never confirms an id is real.
+
+## The weekly plan
+
+Every Monday at 06:00 UTC (09:00 in Addis) a Cloudflare Cron Trigger wakes the
+Worker, and each organization gets three to five posts planned for the week,
+delivered to Telegram as individual drafts with the usual buttons. `/plan` runs
+it on demand.
+
+`main` in `wrangler.jsonc` points at `src/worker.ts` rather than Start's default
+entry: Start exports only `fetch`, and Cloudflare delivers cron to `scheduled`,
+so the two are composed by hand instead of running a second Worker for it.
+
+The plan is **idempotent per week**. A cron that fires twice, or a retry after a
+partial failure, finds the successful `weekly_plan` run already in `agent_runs`
+and skips — the action log is the source of truth for what has run, which is
+cheaper and more honest than a lock. `/plan` passes `force` so a human asking
+is never refused.
+
+It refuses to plan for a brand with an empty profile. Five generic adverts are
+worse than no plan: they teach people to ignore the Monday message.
+
+Organizations are planned one at a time, and one tenant's failure never stops
+the rest.
 
 ## Email
 

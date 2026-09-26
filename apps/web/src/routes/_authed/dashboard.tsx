@@ -143,7 +143,11 @@ function Dashboard() {
 								</p>
 								<p className="mt-2 type-caption">
 									<Link to="/workspace/$orgId" params={{ orgId: org.id }}>
-										Edit brand brain
+										Brand brain
+									</Link>
+									{" · "}
+									<Link to="/content/$orgId" params={{ orgId: org.id }}>
+										Content
 									</Link>
 								</p>
 								{org.role === "member" ? null : <InviteButton orgId={org.id} />}

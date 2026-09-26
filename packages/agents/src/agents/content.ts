@@ -25,6 +25,15 @@ export type BrandContext = {
 	 * thing an example can never convey.
 	 */
 	corrections?: readonly { before: string; after: string }[];
+	/**
+	 * Drafts a human threw out, and why.
+	 *
+	 * Only rejections with a stated reason are useful: "no" on its own says
+	 * something was wrong without saying what, and a list of rejected posts with
+	 * no explanation would teach the model to avoid their *subjects* rather than
+	 * their faults.
+	 */
+	rejections?: readonly { body: string; reason: string }[];
 };
 
 export type DraftRequest = {
@@ -82,11 +91,24 @@ function instructionsFor(brand: BrandContext, language: Language): string {
 				]
 			: [];
 
+	const rejections =
+		brand.rejections && brand.rejections.length > 0
+			? [
+					"",
+					"Drafts a human threw out, with their reason. Avoid the same faults:",
+					...brand.rejections.flatMap((rejection) => [
+						`- Rejected: ${rejection.body}`,
+						`  Because: ${rejection.reason}`,
+					]),
+				]
+			: [];
+
 	return [
 		`You are a social media copywriter for ${brand.name}.`,
 		"",
 		...facts,
 		...examples,
+		...rejections,
 		...corrections,
 		"",
 		`Write in ${language.promptName}.`,
@@ -125,6 +147,62 @@ export async function draftPost(request: DraftRequest): Promise<Draft> {
 	});
 
 	const { output, cost } = await agent.run(request.brief);
+
+	return {
+		output: output.trim(),
+		cost,
+		modelId: agent.modelId,
+		language,
+	};
+}
+
+/** The one-tap refinements offered under every draft. */
+export const REFINEMENT_INSTRUCTIONS = {
+	again:
+		"Write a different post for the same brief. Take a genuinely different angle — do not reword what is below.",
+	shorter:
+		"Cut this down. Same point, fewer words. Remove anything decorative.",
+	cta: "Keep this as it is, and end it with a clear, specific ask in the brand's voice.",
+} as const;
+
+export type RefinementKind = keyof typeof REFINEMENT_INSTRUCTIONS;
+
+/**
+ * Rewrites an existing draft.
+ *
+ * Reuses `instructionsFor` verbatim so the brand's voice rules stay in the
+ * system block: a refinement narrows the request, it never overrides the brand.
+ * That also keeps the cacheable prefix identical to a first draft — the
+ * previous body and the instruction go in the user turn, where they belong.
+ */
+export async function refinePost(request: {
+	brand: BrandContext;
+	previousBody: string;
+	/** A preset, or whatever a human typed as a reply. */
+	instruction: string;
+	language?: Language;
+}): Promise<Draft> {
+	const language = request.language ?? defaultLanguage();
+
+	const agent = defineAgent({
+		id: "content",
+		tier: "cheap",
+		instructions: instructionsFor(request.brand, language),
+		maxSteps: 1,
+		temperature: 0.8,
+	});
+
+	const { output, cost } = await agent.run(
+		[
+			"Here is the current draft:",
+			"",
+			request.previousBody,
+			"",
+			request.instruction,
+			"",
+			"Reply with the new post only.",
+		].join("\n"),
+	);
 
 	return {
 		output: output.trim(),

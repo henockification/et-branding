@@ -135,6 +135,19 @@ export class TelegramClient {
 		});
 	}
 
+	/**
+	 * Registers the command list Telegram shows behind the blue Menu button and
+	 * when someone types "/". Without it that menu is empty and every command has
+	 * to be memorised.
+	 *
+	 * Verified against the live API: BotCommand is `{command, description}`.
+	 */
+	setMyCommands(
+		commands: readonly { command: string; description: string }[],
+	): Promise<boolean> {
+		return this.call("setMyCommands", { commands });
+	}
+
 	getMe(): Promise<{ id: number; username: string; first_name: string }> {
 		return this.call("getMe", {});
 	}

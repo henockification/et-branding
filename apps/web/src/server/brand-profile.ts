@@ -45,12 +45,40 @@ async function requireMembership(
 	return { userId: session.user.id, role: membership.role };
 }
 
+/**
+ * The read path returns rather than throws.
+ *
+ * A thrown `Response` is right for a mutation, but a page loader that throws
+ * one escapes as an unhandled 500 and the visitor sees raw JSON instead of the
+ * app. Writes below still throw, because there the caller is code, not a route.
+ */
+async function readMembership(
+	orgId: string,
+): Promise<{ role: "owner" | "approver" | "member" } | null> {
+	const session = await getAuth().api.getSession({
+		headers: getRequest().headers,
+	});
+
+	if (!session) return null;
+
+	const [membership] = await getDb()
+		.select({ role: orgMember.role })
+		.from(orgMember)
+		.where(
+			and(eq(orgMember.orgId, orgId), eq(orgMember.userId, session.user.id)),
+		)
+		.limit(1);
+
+	return membership ?? null;
+}
+
 const orgIdSchema = z.object({ orgId: z.string().uuid() });
 
 export const fetchBrandProfile = createServerFn({ method: "GET" })
 	.validator(orgIdSchema)
 	.handler(async ({ data }) => {
-		const { role } = await requireMembership(data.orgId);
+		const membership = await readMembership(data.orgId);
+		if (!membership) return { found: false } as const;
 
 		const [row] = await getDb()
 			.select({
@@ -66,12 +94,11 @@ export const fetchBrandProfile = createServerFn({ method: "GET" })
 			.where(eq(organization.id, data.orgId))
 			.limit(1);
 
-		if (!row) {
-			throw new Response("Not found.", { status: 404 });
-		}
+		if (!row) return { found: false } as const;
 
 		return {
-			role,
+			found: true as const,
+			role: membership.role,
 			orgName: row.orgName,
 			name: row.name ?? row.orgName,
 			summary: row.summary ?? "",

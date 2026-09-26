@@ -11,7 +11,11 @@ import {
 	escapeHtml,
 	formatRef,
 	isForwarded,
+	isRefinement,
+	keyboardAction,
+	MAIN_KEYBOARD,
 	messageText,
+	normaliseLabel,
 	parseCallbackData,
 	parseRef,
 	type TelegramMessage,
@@ -20,9 +24,21 @@ import {
 	verifyInviteToken,
 } from "@et/telegram";
 import { capturePastPost, describeBrain } from "#/server/telegram/capture";
-import { getTelegram, inviteSecret } from "#/server/telegram/client";
+import {
+	acknowledge,
+	getTelegram,
+	inviteSecret,
+	tell,
+} from "#/server/telegram/client";
 import { handleDraftCommand } from "#/server/telegram/draft";
-import { handleEditSubmission, promptForEdit } from "#/server/telegram/edit";
+import {
+	handleEditSubmission,
+	handleRejectionReason,
+	promptForEdit,
+	promptForReason,
+} from "#/server/telegram/edit";
+import { refineDraft } from "#/server/telegram/refine";
+import { runWeeklyPlan } from "#/server/telegram/weekly";
 
 /** A linked Telegram user, resolved to their membership. */
 type Member = {
@@ -51,19 +67,17 @@ async function findMember(telegramUserId: number): Promise<Member | null> {
 }
 
 const HELP = [
-	"<b>What I can do</b>",
+	"<b>Just tell me what to write.</b>",
 	"",
-	"/draft &lt;what it is about&gt; — write a post for review",
-	"/brain — what I know about your brand",
-	"/remember &lt;a past post&gt; — paste one in so I learn the voice",
-	"/whoami — which workspace you are linked to",
-	"/help — this message",
+	"Type it however you like — <i>we are hiring two camera operators</i> — and I will draft a post. No commands needed.",
 	"",
-	"<b>Forward me your best past posts.</b> No command needed — I keep them and write like them.",
+	"<b>Forward me your best past posts.</b> I keep them and write like them.",
 	"",
-	"Tap <b>Edit</b> on a draft and reply with your version — I save what you changed so the writing gets closer each time.",
+	"On every draft: <b>Approve</b>, <b>Edit</b> or <b>Reject</b>, and <b>Try again</b> / <b>Shorter</b> / <b>Add a CTA</b> for another go. You can also just reply to a draft telling me what to change.",
 	"",
-	"Nothing I write is published. Every draft waits for a human to approve, edit or reject it.",
+	"Buttons at the bottom do the rest. If you prefer typing: /draft, /plan, /brain, /remember, /whoami, /start.",
+	"",
+	"Nothing I write is published. Every draft waits for a human.",
 ].join("\n");
 
 /**
@@ -81,8 +95,16 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
 		}
 
 		const message = update.message;
-		const text = message ? messageText(message) : undefined;
-		if (!message || !text || !message.from || message.from.is_bot) return;
+		if (!message || !message.from || message.from.is_bot) return;
+
+		const text = messageText(message);
+
+		// Silence reads as "the bot is broken". Anything without words gets an
+		// honest one-liner rather than nothing at all.
+		if (!text) {
+			await handleNonText(message);
+			return;
+		}
 
 		await handleMessage({
 			chatId: message.chat.id,
@@ -102,8 +124,7 @@ async function handleMessage(input: {
 	message: TelegramMessage;
 }): Promise<void> {
 	const telegram = getTelegram();
-	const [command, ...rest] = input.text.split(/\s+/);
-	const argument = rest.join(" ");
+	const { command, argument } = parseCommand(input.text);
 
 	if (command === "/start") {
 		await handleStart({ ...input, argument });
@@ -125,13 +146,48 @@ async function handleMessage(input: {
 	// otherwise look like a command or a forward.
 	const repliedTo = input.message.reply_to_message;
 	const ref = repliedTo ? parseRef(messageText(repliedTo)) : null;
+
+	// Replying to a delivered draft is the most natural way to ask for a change
+	// ("make it shorter, mention the price"). It is an instruction, not a
+	// rewrite — a rewrite only ever comes from the Edit prompt.
+	if (ref?.kind === "draft") {
+		if (member.role === "member") {
+			await tell(input.chatId, "Only an owner or approver can change a draft.");
+			return;
+		}
+
+		await tell(input.chatId, "Rewriting…");
+
+		const outcome = await refineDraft({
+			orgId: member.orgId,
+			chatId: input.chatId,
+			messageId: repliedTo?.message_id ?? 0,
+			itemId: ref.id,
+			instruction: { free: input.text },
+		});
+
+		await reportRefineOutcome(input.chatId, outcome);
+		return;
+	}
+
+	if (ref?.kind === "reason") {
+		await handleRejectionReason({
+			orgId: member.orgId,
+			memberRole: member.role,
+			chatId: input.chatId,
+			ref: ref.id,
+			reason: input.text,
+		});
+		return;
+	}
+
 	if (ref) {
 		await handleEditSubmission({
 			orgId: member.orgId,
 			memberId: member.memberId,
 			memberRole: member.role,
 			chatId: input.chatId,
-			ref,
+			ref: ref.id,
 			corrected: input.text,
 		});
 		return;
@@ -161,21 +217,13 @@ async function handleMessage(input: {
 			});
 			return;
 
-		case "/brain": {
-			const [profile] = await getDb()
-				.select({ name: brandProfile.name, summary: brandProfile.summary })
-				.from(brandProfile)
-				.where(eq(brandProfile.orgId, member.orgId))
-				.limit(1);
-
-			await describeBrain({
-				orgId: member.orgId,
-				chatId: input.chatId,
-				brandName: profile?.name ?? member.orgName,
-				hasProfile: Boolean(profile?.summary),
-			});
+		case "/brain":
+			await describeBrainFor(member, input.chatId);
 			return;
-		}
+
+		case "/plan":
+			await runPlanFor(member, input.chatId);
+			return;
 
 		case "/draft":
 			await handleDraftCommand({
@@ -186,7 +234,7 @@ async function handleMessage(input: {
 			return;
 
 		case "/help":
-			await telegram.sendMessage({ chatId: input.chatId, text: HELP });
+			await tell(input.chatId, HELP);
 			return;
 
 		case "/whoami": {
@@ -209,11 +257,145 @@ async function handleMessage(input: {
 		}
 
 		default:
-			await telegram.sendMessage({
-				chatId: input.chatId,
-				text: `I do not know that one yet. ${HELP}`,
-			});
+			break;
 	}
+
+	// A keyboard button sends its label as ordinary text. Matched on the whole
+	// message, never a prefix: a real brief often starts "write a post about…".
+	const intent = keyboardAction(input.text);
+
+	if (intent === "help") {
+		await tell(input.chatId, HELP);
+		return;
+	}
+
+	if (intent === "brain") {
+		await describeBrainFor(member, input.chatId);
+		return;
+	}
+
+	if (intent === "plan") {
+		await runPlanFor(member, input.chatId);
+		return;
+	}
+
+	if (intent === "draft") {
+		await promptForBrief(input.chatId);
+		return;
+	}
+
+	// A slash command we do not have. Say so briefly — dumping the whole help
+	// block on every typo is noise, and the keyboard is on screen anyway.
+	if (command) {
+		await tell(
+			input.chatId,
+			`I do not know <code>${escapeHtml(command)}</code>. Tap a button below, or just tell me what to post about.`,
+		);
+		return;
+	}
+
+	// Acknowledgements are not briefs. Without this every "ok" is a paid call.
+	if (isSmallTalk(input.text)) {
+		await tell(input.chatId, "👍");
+		return;
+	}
+
+	// Anything else is what to write about.
+	await handleDraftCommand({
+		orgId: member.orgId,
+		chatId: input.chatId,
+		brief: input.text,
+	});
+}
+
+/**
+ * A command is a slash, a name, and optionally the bot's username.
+ *
+ * Telegram appends `@botname` in groups, which the old first-token match never
+ * stripped — so `/help@negaritbrand_bot` fell through to "I do not know that
+ * one yet". Anything that fails this grammar (`/ 20% off`, `/2 days to go`) is
+ * prose, not a command.
+ */
+function parseCommand(text: string): {
+	command: string | null;
+	argument: string;
+} {
+	const [first, ...rest] = text.split(/\s+/);
+	const match = first
+		? /^\/([A-Za-z0-9_]{1,32})(?:@[A-Za-z0-9_]{5,32})?$/.exec(first)
+		: null;
+
+	return {
+		command: match?.[1] ? `/${match[1].toLowerCase()}` : null,
+		argument: rest.join(" "),
+	};
+}
+
+/**
+ * Words that carry no brief on their own.
+ *
+ * Matched per word rather than as whole phrases: a set of phrases missed
+ * "ok thanks" and turned an acknowledgement into a paid model call — precisely
+ * what this guard exists to stop.
+ */
+const SMALL_TALK_WORDS = new Set([
+	"ok",
+	"okay",
+	"k",
+	"thanks",
+	"thank",
+	"you",
+	"ta",
+	"got",
+	"it",
+	"yes",
+	"yep",
+	"no",
+	"nope",
+	"cool",
+	"nice",
+	"great",
+	"good",
+	"sure",
+	"hi",
+	"hello",
+	"hey",
+	"morning",
+	"please",
+	"done",
+	"perfect",
+]);
+
+/** A short message made entirely of pleasantries is not a brief. */
+function isSmallTalk(text: string): boolean {
+	const normalised = normaliseLabel(text);
+	if (normalised.length === 0) return true;
+
+	const words = normalised.split(" ");
+	// A real brief is longer than this even when terse ("hiring two camera ops").
+	if (words.length > 4) return false;
+
+	return words.every((word) => SMALL_TALK_WORDS.has(word));
+}
+
+/** Non-text messages: say something honest rather than nothing. */
+async function handleNonText(message: TelegramMessage): Promise<void> {
+	const chatId = message.chat.id;
+
+	if (message.photo?.length) {
+		await tell(
+			chatId,
+			isForwarded(message)
+				? "That came through without any words, so there is nothing for me to learn from. Forward one with its caption."
+				: "Good picture. What should the post say?",
+		);
+		return;
+	}
+
+	await tell(
+		chatId,
+		"I can only read words for now. Type what you want, or forward a post and I will learn from it.",
+	);
 }
 
 /**
@@ -235,8 +417,11 @@ async function handleStart(input: {
 		await telegram.sendMessage({
 			chatId: input.chatId,
 			text: existing
-				? `You are linked to <b>${escapeHtml(existing.orgName)}</b>. Send /help to see what I can do.`
+				? `You are linked to <b>${escapeHtml(existing.orgName)}</b>. Tell me what to write, or tap a button.`
 				: "Welcome. This chat is not linked to a workspace yet — open the invite link your admin sent you.",
+			// The keyboard is chat-level and sticks around; sending it here means
+			// nobody has to discover a command to get started.
+			...(existing ? { replyMarkup: MAIN_KEYBOARD } : {}),
 		});
 		return;
 	}
@@ -289,7 +474,8 @@ async function handleStart(input: {
 
 	await telegram.sendMessage({
 		chatId: input.chatId,
-		text: `Linked to <b>${escapeHtml(org?.name ?? "your workspace")}</b>. Send /help to see what I can do.`,
+		text: `Linked to <b>${escapeHtml(org?.name ?? "your workspace")}</b>. Tell me what to write, or tap a button below.`,
+		replyMarkup: MAIN_KEYBOARD,
 	});
 }
 
@@ -310,20 +496,25 @@ async function handleCallback(query: {
 	const parsed = parseCallbackData(query.data);
 
 	if (!parsed || !query.message) {
-		await telegram.answerCallbackQuery({
-			callbackQueryId: query.id,
-			text: "That button is no longer valid.",
-		});
+		await acknowledge(query.id, "That button is no longer valid.");
 		return;
 	}
 
 	const member = await findMember(query.from.id);
 
-	if (!member || member.role === "member") {
-		await telegram.answerCallbackQuery({
-			callbackQueryId: query.id,
-			text: "Only an approver or owner can decide on drafts.",
-		});
+	if (!member) {
+		await acknowledge(query.id, "This chat is not linked to a workspace.");
+		return;
+	}
+
+	// Deciding and refining are different rights. The role check used to sit
+	// here, before the action was known, which would have made the refine
+	// buttons unusable for exactly the role that is allowed to draft.
+	if (member.role === "member") {
+		await acknowledge(
+			query.id,
+			"Only an approver or owner can change or decide on drafts.",
+		);
 		return;
 	}
 
@@ -340,15 +531,29 @@ async function handleCallback(query: {
 		.limit(1);
 
 	if (!item) {
-		await telegram.answerCallbackQuery({
-			callbackQueryId: query.id,
-			text: "That draft is gone.",
+		await acknowledge(query.id, "That draft is gone.");
+		return;
+	}
+
+	const action = parsed.action;
+
+	if (isRefinement(action)) {
+		await acknowledge(query.id);
+
+		const outcome = await refineDraft({
+			orgId: member.orgId,
+			chatId: query.message.chat.id,
+			messageId: query.message.message_id,
+			itemId: parsed.id,
+			instruction: action,
 		});
+
+		await reportRefineOutcome(query.message.chat.id, outcome);
 		return;
 	}
 
 	if (parsed.action === "edit") {
-		await telegram.answerCallbackQuery({ callbackQueryId: query.id });
+		await acknowledge(query.id);
 		await promptForEdit({
 			chatId: query.message.chat.id,
 			ref: formatRef(item.id),
@@ -358,7 +563,9 @@ async function handleCallback(query: {
 
 	const status = parsed.action === "approve" ? "approved" : "rejected";
 
-	await db
+	// Only an undecided draft can be decided. Two fast taps, or a decision
+	// landing while a refinement is in flight, would otherwise both write.
+	const [decided] = await db
 		.update(contentItem)
 		.set({
 			status,
@@ -366,12 +573,15 @@ async function handleCallback(query: {
 			reviewedAt: new Date(),
 			updatedAt: new Date(),
 		})
-		.where(eq(contentItem.id, item.id));
+		.where(and(eq(contentItem.id, item.id), eq(contentItem.status, "draft")))
+		.returning({ id: contentItem.id });
 
-	await telegram.answerCallbackQuery({
-		callbackQueryId: query.id,
-		text: status === "approved" ? "Approved" : "Rejected",
-	});
+	if (!decided) {
+		await acknowledge(query.id, "That one was already decided.");
+		return;
+	}
+
+	await acknowledge(query.id, status === "approved" ? "Approved" : "Rejected");
 
 	// Drop the buttons so the decision cannot be double-submitted.
 	await telegram.editMessageText({
@@ -381,4 +591,91 @@ async function handleCallback(query: {
 			`${escapeHtml(item.body)}\n\n— <i>${status} by ${escapeHtml(member.displayName)}</i>`,
 		),
 	});
+
+	if (status === "rejected") {
+		await promptForReason({
+			chatId: query.message.chat.id,
+			ref: formatRef(item.id, "reason"),
+		});
+	}
+}
+
+/** `/brain` and the "What you know" button share this. */
+async function describeBrainFor(member: Member, chatId: number): Promise<void> {
+	const [profile] = await getDb()
+		.select({ name: brandProfile.name, summary: brandProfile.summary })
+		.from(brandProfile)
+		.where(eq(brandProfile.orgId, member.orgId))
+		.limit(1);
+
+	await describeBrain({
+		orgId: member.orgId,
+		chatId,
+		brandName: profile?.name ?? member.orgName,
+		hasProfile: Boolean(profile?.summary),
+	});
+}
+
+/** `/plan` and the "This week" button share this. */
+async function runPlanFor(member: Member, chatId: number): Promise<void> {
+	if (member.role === "member") {
+		await tell(
+			chatId,
+			"Only an owner or approver can ask for the week's plan.",
+		);
+		return;
+	}
+
+	await tell(chatId, "Planning your week — this takes a moment.");
+
+	// Forced: a human asking should not be refused because the scheduler
+	// already ran on Monday.
+	const outcome = await runWeeklyPlan({ orgId: member.orgId, force: true });
+
+	if (outcome.status === "skipped") {
+		await tell(
+			chatId,
+			`I could not plan the week: ${escapeHtml(outcome.reason)}`,
+		);
+	}
+}
+
+/**
+ * The "Write a post" button carries no argument, so ask for one.
+ *
+ * `force_reply` opens the composer pointed at this message; the reply is an
+ * ordinary brief and falls through to the prose path.
+ */
+async function promptForBrief(chatId: number): Promise<void> {
+	await getTelegram().sendMessage({
+		chatId,
+		text: "What should it be about?",
+		replyMarkup: {
+			force_reply: true,
+			input_field_placeholder: "We are hiring two camera operators…",
+		},
+	});
+}
+
+/** Turns a refine result into something worth reading. */
+async function reportRefineOutcome(
+	chatId: number,
+	outcome: Awaited<ReturnType<typeof refineDraft>>,
+): Promise<void> {
+	switch (outcome.status) {
+		case "done":
+			return;
+		case "gone":
+			await tell(chatId, "I cannot find that draft any more.");
+			return;
+		case "decided":
+			await tell(chatId, "That one was already decided, so I left it alone.");
+			return;
+		case "failed":
+			await tell(
+				chatId,
+				`I could not rewrite that: ${escapeHtml(outcome.reason)}`,
+			);
+			return;
+	}
 }

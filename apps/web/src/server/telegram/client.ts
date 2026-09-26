@@ -41,3 +41,41 @@ export function inviteSecret(): string {
 	}
 	return secret;
 }
+
+/**
+ * A message whose delivery does not matter enough to fail over.
+ *
+ * Acknowledgements, progress notes and error notices all go through here.
+ * Awaiting `sendMessage` directly for these has bitten twice: a failed courtesy
+ * message threw and aborted the work it was announcing. Anything whose loss
+ * would be invisible to the user belongs here; anything carrying the result
+ * should be sent after the work is recorded.
+ */
+export async function tell(chatId: number, text: string): Promise<void> {
+	try {
+		await getTelegram().sendMessage({ chatId, text });
+	} catch (error) {
+		console.error("telegram notice failed", error);
+	}
+}
+
+/**
+ * Acknowledge a tapped button. Never throws.
+ *
+ * Telegram rejects a callback id that is stale, and the toast is decoration —
+ * letting that abort the work behind the button is the same mistake as awaiting
+ * a typing indicator. This is the fourth place it would have bitten.
+ */
+export async function acknowledge(
+	callbackQueryId: string,
+	text?: string,
+): Promise<void> {
+	try {
+		await getTelegram().answerCallbackQuery({
+			callbackQueryId,
+			...(text ? { text } : {}),
+		});
+	} catch (error) {
+		console.error("telegram acknowledge failed", error);
+	}
+}
