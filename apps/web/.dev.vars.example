@@ -54,3 +54,8 @@ OPENROUTER_API_KEY=""
 # everything to the free model while testing. Must be an id from
 # packages/agents/src/models/catalog.ts.
 # ET_DEFAULT_MODEL="qwen/qwen3.8-27b:free"
+
+# Optional: the model that looks at photos sent to the bot. Must be a catalog
+# model marked `seesImages`. Not affected by ET_DEFAULT_MODEL, since the text
+# tiers cannot see. Defaults to google/gemini-2.5-flash-lite.
+# ET_VISION_MODEL="openai/gpt-4o-mini"

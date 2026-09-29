@@ -6,6 +6,7 @@ import {
 	getDb,
 	organization,
 	orgMember,
+	telegramUpdate,
 } from "@et/db";
 import {
 	escapeHtml,
@@ -14,6 +15,7 @@ import {
 	isRefinement,
 	keyboardAction,
 	MAIN_KEYBOARD,
+	messageImage,
 	messageText,
 	normaliseLabel,
 	parseCallbackData,
@@ -37,6 +39,7 @@ import {
 	promptForEdit,
 	promptForReason,
 } from "#/server/telegram/edit";
+import { choosePhoto, handlePhotoDraft } from "#/server/telegram/photo-draft";
 import { refineDraft } from "#/server/telegram/refine";
 import { runWeeklyPlan } from "#/server/telegram/weekly";
 
@@ -71,6 +74,8 @@ const HELP = [
 	"",
 	"Type it however you like — <i>we are hiring two camera operators</i> — and I will draft a post. No commands needed.",
 	"",
+	"<b>Send a photo</b> — from an event, the office, anywhere — with a line about it or without. I give it a light, natural touch-up and write the post to go with it.",
+	"",
 	"<b>Forward me your best past posts.</b> I keep them and write like them.",
 	"",
 	"On every draft: <b>Approve</b>, <b>Edit</b> or <b>Reject</b>, and <b>Try again</b> / <b>Shorter</b> / <b>Add a CTA</b> for another go. You can also just reply to a draft telling me what to change.",
@@ -96,6 +101,14 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
 
 		const message = update.message;
 		if (!message || !message.from || message.from.is_bot) return;
+
+		// A photo someone took is a brief in itself, caption or not. A forwarded
+		// one is someone else's post and stays on the learn-from-it path below.
+		const image = messageImage(message);
+		if (image && !isForwarded(message)) {
+			await handlePhoto(message, image.fileId);
+			return;
+		}
 
 		const text = messageText(message);
 
@@ -378,16 +391,90 @@ function isSmallTalk(text: string): boolean {
 	return words.every((word) => SMALL_TALK_WORDS.has(word));
 }
 
+/** The largest file the Bot API lets a bot download. */
+const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+
+/**
+ * A photo sent to be posted.
+ *
+ * Albums arrive as one update per photo, with the caption on only one of them.
+ * One post per photo is all this does for now, so the captioned photo is used
+ * and the rest are declined — once per album, not once per photo.
+ */
+async function handlePhoto(
+	message: TelegramMessage,
+	fileId: string,
+): Promise<void> {
+	const chatId = message.chat.id;
+	const member = message.from ? await findMember(message.from.id) : null;
+
+	if (!member) {
+		await tell(
+			chatId,
+			"This chat is not linked to a workspace yet. Ask your admin for an invite link and open it, or send /start with the invite code.",
+		);
+		return;
+	}
+
+	const caption = message.caption?.trim() ?? "";
+
+	if (message.media_group_id && !caption) {
+		if (await claimOnce(`album:${message.media_group_id}`)) {
+			await tell(
+				chatId,
+				"I write one post per photo for now, so from an album I only use the photo that has the caption. If none had one, send the photo you want on its own.",
+			);
+		}
+		return;
+	}
+
+	const size = messageImage(message)?.fileSize;
+	if (size && size > MAX_DOWNLOAD_BYTES) {
+		await tell(
+			chatId,
+			"That file is over 20 MB, which is more than Telegram lets me download. Send it as a photo rather than a file.",
+		);
+		return;
+	}
+
+	await handlePhotoDraft({ orgId: member.orgId, chatId, fileId, caption });
+}
+
+/**
+ * True the first time it is called with `key`, false after.
+ *
+ * Borrows `telegram_updates`, whose job is already exactly this for update
+ * ids. Real update ids are positive, so the key is hashed into the negative
+ * range where it cannot collide with one, and the existing seven-day cleanup
+ * clears it with the rest.
+ */
+async function claimOnce(key: string): Promise<boolean> {
+	// FNV-1a, folded to 52 bits so it survives the trip through a JS number.
+	let hash = 0xcbf29ce484222325n;
+	for (const char of key) {
+		hash ^= BigInt(char.codePointAt(0) ?? 0);
+		hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn;
+	}
+	const syntheticId = -Number((hash % (1n << 52n)) + 1n);
+
+	const [claimed] = await getDb()
+		.insert(telegramUpdate)
+		.values({ updateId: syntheticId })
+		.onConflictDoNothing()
+		.returning({ updateId: telegramUpdate.updateId });
+
+	return Boolean(claimed);
+}
+
 /** Non-text messages: say something honest rather than nothing. */
 async function handleNonText(message: TelegramMessage): Promise<void> {
 	const chatId = message.chat.id;
 
+	// Only forwarded photos reach here; ones taken to be posted go to handlePhoto.
 	if (message.photo?.length) {
 		await tell(
 			chatId,
-			isForwarded(message)
-				? "That came through without any words, so there is nothing for me to learn from. Forward one with its caption."
-				: "Good picture. What should the post say?",
+			"That came through without any words, so there is nothing for me to learn from. Forward one with its caption.",
 		);
 		return;
 	}
@@ -536,6 +623,38 @@ async function handleCallback(query: {
 	}
 
 	const action = parsed.action;
+
+	if (action === "photo_original" || action === "photo_polished") {
+		const choice = action === "photo_original" ? "original" : "polished";
+
+		const outcome = await choosePhoto({
+			orgId: member.orgId,
+			chatId: query.message.chat.id,
+			messageId: query.message.message_id,
+			itemId: item.id,
+			choice,
+		}).catch((error: unknown) => {
+			console.error("photo swap failed", error);
+			return "failed" as const;
+		});
+
+		if (outcome === "failed") {
+			await acknowledge(query.id, "Could not swap the photo. Try again.");
+			return;
+		}
+
+		await acknowledge(
+			query.id,
+			outcome === "ok"
+				? choice === "original"
+					? "Using the original"
+					: "Using the polished one"
+				: outcome === "published"
+					? "Already posted — too late to swap."
+					: "That photo is gone.",
+		);
+		return;
+	}
 
 	if (isRefinement(action)) {
 		await acknowledge(query.id);

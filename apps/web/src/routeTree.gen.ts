@@ -20,6 +20,7 @@ import { Route as DevHealthRouteImport } from './routes/dev/health'
 import { Route as AuthedContentOrgIdRouteImport } from './routes/_authed/content.$orgId'
 import { Route as AuthedWorkspaceOrgIdRouteImport } from './routes/_authed/workspace.$orgId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiMediaItemIdRouteImport } from './routes/api/media/$itemId'
 import { Route as ApiTelegramWebhookRouteImport } from './routes/api/telegram/webhook'
 
 const IndexRoute = IndexRouteImport.update({
@@ -76,6 +77,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMediaItemIdRoute = ApiMediaItemIdRouteImport.update({
+  id: '/api/media/$itemId',
+  path: '/api/media/$itemId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiTelegramWebhookRoute = ApiTelegramWebhookRouteImport.update({
   id: '/api/telegram/webhook',
   path: '/api/telegram/webhook',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/content/$orgId': typeof AuthedContentOrgIdRoute
   '/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/media/$itemId': typeof ApiMediaItemIdRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/content/$orgId': typeof AuthedContentOrgIdRoute
   '/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/media/$itemId': typeof ApiMediaItemIdRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRoutesById {
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/_authed/content/$orgId': typeof AuthedContentOrgIdRoute
   '/_authed/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/media/$itemId': typeof ApiMediaItemIdRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
 }
 export interface FileRouteTypes {
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/content/$orgId'
     | '/workspace/$orgId'
     | '/api/auth/$'
+    | '/api/media/$itemId'
     | '/api/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/content/$orgId'
     | '/workspace/$orgId'
     | '/api/auth/$'
+    | '/api/media/$itemId'
     | '/api/telegram/webhook'
   id:
     | '__root__'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/_authed/content/$orgId'
     | '/_authed/workspace/$orgId'
     | '/api/auth/$'
+    | '/api/media/$itemId'
     | '/api/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -175,6 +187,7 @@ export interface RootRouteChildren {
   SignUpRoute: typeof SignUpRoute
   DevHealthRoute: typeof DevHealthRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiMediaItemIdRoute: typeof ApiMediaItemIdRoute
   ApiTelegramWebhookRoute: typeof ApiTelegramWebhookRoute
 }
 
@@ -257,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/media/$itemId': {
+      id: '/api/media/$itemId'
+      path: '/api/media/$itemId'
+      fullPath: '/api/media/$itemId'
+      preLoaderRoute: typeof ApiMediaItemIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/telegram/webhook': {
       id: '/api/telegram/webhook'
       path: '/api/telegram/webhook'
@@ -291,6 +311,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignUpRoute: SignUpRoute,
   DevHealthRoute: DevHealthRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiMediaItemIdRoute: ApiMediaItemIdRoute,
   ApiTelegramWebhookRoute: ApiTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport

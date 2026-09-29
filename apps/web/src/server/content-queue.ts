@@ -78,6 +78,7 @@ export const fetchContentQueue = createServerFn({ method: "GET" })
 			.select({
 				id: contentItem.id,
 				body: contentItem.body,
+				media: contentItem.media,
 				origin: contentItem.origin,
 				plannedFor: contentItem.plannedFor,
 				angle: contentItem.angle,

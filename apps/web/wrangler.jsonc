@@ -17,6 +17,16 @@
   // onboarded: `pnpm --filter @et/web exec wrangler email sending enable <domain>`.
   // Until then resolveEmailSender falls back to printing mail to the log.
   "send_email": [{ "name": "EMAIL" }],
+  // Photos sent to the bot: the original and the polished copy, both private.
+  // Create once per account:
+  //   pnpm --filter @et/web exec wrangler r2 bucket create negarit-branding-media
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "negarit-branding-media" }],
+  // Applies the light photo polish (exposure, contrast, sharpen, crop).
+  // Remote even in dev: the local stand-in only resizes and silently ignores
+  // brightness, contrast, gamma, saturation and sharpen — the whole point.
+  // Needs `wrangler login` (or CLOUDFLARE_API_TOKEN) to run `pnpm dev`.
+  // First 5,000 unique transformations a month are free.
+  "images": { "binding": "IMAGES", "remote": true },
   // Secrets are NOT set here. Push them with:
   //   pnpm --filter @et/web exec wrangler secret put DATABASE_URL
   //   pnpm --filter @et/web exec wrangler secret put DEEPSEEK_API_KEY

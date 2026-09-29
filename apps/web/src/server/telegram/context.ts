@@ -164,3 +164,29 @@ export function draftKeyboard(itemId: string): ReplyMarkup {
 export function draftFooter(itemId: string, note: string): string {
 	return `<i>${note}</i>\n${formatRef(itemId, "draft")}`;
 }
+
+/**
+ * The one button under a photo: switch between the polished and the original.
+ *
+ * The polish is a suggestion. Taking it back has to cost one tap, not a resend.
+ */
+export function photoKeyboard(
+	itemId: string,
+	selected: "original" | "polished",
+): ReplyMarkup {
+	return {
+		inline_keyboard: [
+			[
+				selected === "polished"
+					? {
+							text: "↩️ Use original",
+							callback_data: callbackData("photo_original", itemId),
+						}
+					: {
+							text: "✨ Use polished",
+							callback_data: callbackData("photo_polished", itemId),
+						},
+			],
+		],
+	};
+}

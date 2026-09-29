@@ -39,6 +39,16 @@ export type PhotoSize = {
 	file_unique_id: string;
 	width: number;
 	height: number;
+	file_size?: number;
+};
+
+/** A file sent "as a document" — how a phone sends a photo uncompressed. */
+export type TelegramDocument = {
+	file_id: string;
+	file_unique_id: string;
+	file_name?: string;
+	mime_type?: string;
+	file_size?: number;
 };
 
 export type TelegramMessage = {
@@ -49,7 +59,11 @@ export type TelegramMessage = {
 	text?: string;
 	/** Text that accompanies a photo or video — how most social posts arrive. */
 	caption?: string;
+	/** Every size Telegram made of one photo, smallest first. */
 	photo?: PhotoSize[];
+	document?: TelegramDocument;
+	/** Shared by every message in one album; each photo arrives as its own update. */
+	media_group_id?: string;
 	forward_origin?: MessageOrigin;
 	/** Legacy forward marker, still sent by some clients. */
 	forward_date?: number;
@@ -65,6 +79,26 @@ export function isForwarded(message: TelegramMessage): boolean {
 /** The words in a message, wherever they live. */
 export function messageText(message: TelegramMessage): string | undefined {
 	return message.text ?? message.caption;
+}
+
+/**
+ * The photo in a message, if it has one: a normal photo, or an image sent as a
+ * file. Returns the biggest size, since that is the one worth polishing.
+ */
+export function messageImage(
+	message: TelegramMessage,
+): { fileId: string; fileSize?: number } | null {
+	const largest = message.photo?.at(-1);
+	if (largest) {
+		return { fileId: largest.file_id, fileSize: largest.file_size };
+	}
+
+	const document = message.document;
+	if (document?.mime_type?.startsWith("image/")) {
+		return { fileId: document.file_id, fileSize: document.file_size };
+	}
+
+	return null;
 }
 
 export type TelegramCallbackQuery = {

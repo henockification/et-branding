@@ -187,6 +187,10 @@ function ContentQueue() {
 								</p>
 							) : null}
 
+							{item.media?.some((media) => media.kind === "photo") ? (
+								<PhotoPreview itemId={item.id} media={item.media} />
+							) : null}
+
 							<p className="type-body whitespace-pre-wrap">{item.body}</p>
 
 							{/* The learning pair: what the agent wrote, and what a human made of it. */}
@@ -266,5 +270,45 @@ function StatusBadge({ status }: { status: ContentStatus }) {
 		<span className={`rounded-md px-2 py-0.5 type-label ${tone[status]}`}>
 			{status}
 		</span>
+	);
+}
+
+/**
+ * The photo that will go out with the post, as the human chose it in Telegram.
+ *
+ * The other version is one click away, so whoever reviews the queue can see
+ * what the polish actually did.
+ */
+function PhotoPreview({
+	itemId,
+	media,
+}: {
+	itemId: string;
+	media: readonly { kind: "photo"; selected: "original" | "polished" }[];
+}) {
+	const photo = media.find((m) => m.kind === "photo");
+	if (!photo) return null;
+
+	const other = photo.selected === "polished" ? "original" : "polished";
+
+	return (
+		<figure className="space-y-2">
+			<img
+				src={`/api/media/${itemId}`}
+				alt="Sent with this post"
+				loading="lazy"
+				className="max-h-96 w-full rounded-md object-contain bg-muted"
+			/>
+			<figcaption className="type-caption text-muted-foreground">
+				Posting the {photo.selected} ·{" "}
+				<a
+					href={`/api/media/${itemId}?version=${other}`}
+					target="_blank"
+					rel="noreferrer"
+				>
+					see the {other}
+				</a>
+			</figcaption>
+		</figure>
 	);
 }

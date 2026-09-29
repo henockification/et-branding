@@ -16,6 +16,9 @@ export const CALLBACK_ACTIONS = [
 	// Disambiguation, offered when pasted text is long enough to be a past post.
 	"draft_this",
 	"remember_this",
+	// Which version of a photo goes out with the post.
+	"photo_original",
+	"photo_polished",
 ] as const;
 export type CallbackAction = (typeof CALLBACK_ACTIONS)[number];
 
@@ -29,6 +32,8 @@ const PREFIX: Record<CallbackAction, string> = {
 	cta: "c",
 	draft_this: "d",
 	remember_this: "m",
+	photo_original: "o",
+	photo_polished: "p",
 };
 
 /** Refinements ask the agent to rewrite; they are not human decisions. */

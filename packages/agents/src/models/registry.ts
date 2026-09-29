@@ -1,10 +1,12 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
 import {
+	getModelSpec,
 	isModelId,
 	type ModelId,
 	type ModelTier,
 	TIER_DEFAULTS,
+	VISION_DEFAULT,
 } from "./catalog.ts";
 
 let provider: ReturnType<typeof createOpenRouter> | undefined;
@@ -60,6 +62,25 @@ export function resolveModelId(tierOrId: ModelTier | ModelId): ModelId {
 		return override;
 	}
 	return isModelId(tierOrId) ? tierOrId : TIER_DEFAULTS[tierOrId];
+}
+
+/**
+ * The model that looks at photos.
+ *
+ * Deliberately ignores `ET_DEFAULT_MODEL`: pinning the app to a text-only model
+ * for a test would otherwise break every photo draft with an opaque provider
+ * error. `ET_VISION_MODEL` is its own override, and must be able to see.
+ */
+export function resolveVisionModelId(): ModelId {
+	const override = process.env.ET_VISION_MODEL;
+	if (!override) return VISION_DEFAULT;
+
+	if (!isModelId(override) || !getModelSpec(override).seesImages) {
+		throw new Error(
+			`ET_VISION_MODEL="${override}" is not a catalog model that accepts images. See packages/agents/src/models/catalog.ts.`,
+		);
+	}
+	return override;
 }
 
 /** Throws a readable error when the one required key is absent. */

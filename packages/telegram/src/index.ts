@@ -40,8 +40,9 @@ export type {
 	ReplyMarkup,
 	TelegramCallbackQuery,
 	TelegramChat,
+	TelegramDocument,
 	TelegramMessage,
 	TelegramUpdate,
 	TelegramUser,
 } from "./types.ts";
-export { isForwarded, messageText } from "./types.ts";
+export { isForwarded, messageImage, messageText } from "./types.ts";

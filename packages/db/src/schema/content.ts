@@ -54,6 +54,28 @@ export const contentStatus = pgEnum("content_status", [
 	"published",
 ]);
 
+/**
+ * A photo that goes out with a post.
+ *
+ * Both versions are kept: the polish is a suggestion, and "Use original" has
+ * to be able to take it back without asking anyone to resend the picture. The
+ * keys are R2 object keys under `orgs/{orgId}/media/{id}/`, never public URLs.
+ */
+export type ContentPhoto = {
+	kind: "photo";
+	id: string;
+	originalKey: string;
+	polishedKey: string;
+	/** Which version the human chose. Starts as "polished". */
+	selected: "original" | "polished";
+	/** The edits applied, as numbers, so a bad polish can be diagnosed later. */
+	adjustments: Record<string, number | string>;
+	/** What the vision step saw, as given to the copywriter. */
+	description: string;
+};
+
+export type ContentMedia = ContentPhoto;
+
 export const contentItem = pgTable(
 	"content_items",
 	{
@@ -70,8 +92,8 @@ export const contentItem = pgTable(
 		channel: contentChannel("channel").notNull(),
 		language: contentLanguage("language").notNull(),
 		body: text("body").notNull(),
-		/** Image or video references the humans will shoot and attach. */
-		media: jsonb("media").$type<unknown[]>(),
+		/** Photos that go out with the post. Nothing but photos yet. */
+		media: jsonb("media").$type<ContentMedia[]>(),
 		status: contentStatus("status").notNull().default("draft"),
 		/**
 		 * A human's note: why it was rejected, or what they were going for.

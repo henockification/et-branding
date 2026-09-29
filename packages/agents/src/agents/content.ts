@@ -41,7 +41,35 @@ export type DraftRequest = {
 	/** What the human asked for, in their own words. */
 	brief: string;
 	language?: Language;
+	/** When the post goes out with a photo: what is in it, as the vision step read it. */
+	photo?: { description: string; visibleText?: string };
 };
+
+/**
+ * The user turn for a photo post.
+ *
+ * The writer never sees the image, only this account of it. The instruction not
+ * to narrate the photo matters: without it the model opens with "In this
+ * photo…", which nobody posting their own picture would ever write.
+ */
+function photoBrief(
+	brief: string,
+	photo: NonNullable<DraftRequest["photo"]>,
+): string {
+	return [
+		"This post goes out with a photo. What is in it:",
+		photo.description,
+		...(photo.visibleText?.trim()
+			? [`Text visible in the photo: ${photo.visibleText.trim()}`]
+			: []),
+		"",
+		brief.trim()
+			? `What they want the post to say: ${brief.trim()}`
+			: "They sent the photo without a caption — write the post it deserves.",
+		"",
+		"The reader sees the photo above your words. Do not describe it back to them, and never write 'in this photo'. Only state what is in the photo or the brief.",
+	].join("\n");
+}
 
 function describe(label: string, value: unknown): string | null {
 	if (value === null || value === undefined) return null;
@@ -146,7 +174,9 @@ export async function draftPost(request: DraftRequest): Promise<Draft> {
 		temperature: 0.8,
 	});
 
-	const { output, cost } = await agent.run(request.brief);
+	const { output, cost } = await agent.run(
+		request.photo ? photoBrief(request.brief, request.photo) : request.brief,
+	);
 
 	return {
 		output: output.trim(),

@@ -8,6 +8,15 @@ export {
 	refinePost,
 } from "./agents/content.ts";
 export {
+	ADJUSTMENT_LIMITS,
+	clampAdjustments,
+	isNeutral,
+	NEUTRAL_ADJUSTMENTS,
+	type PhotoAdjustments,
+	type PhotoReading,
+	readPhoto,
+} from "./agents/photo.ts";
+export {
 	type PlannedPost,
 	planWeek,
 	WEEKDAYS,
@@ -34,5 +43,10 @@ export {
 	listModelSpecs,
 	MODEL_CATALOG,
 	TIER_DEFAULTS,
+	VISION_DEFAULT,
 } from "./models/catalog.ts";
-export { resolveModel, resolveModelId } from "./models/registry.ts";
+export {
+	resolveModel,
+	resolveModelId,
+	resolveVisionModelId,
+} from "./models/registry.ts";

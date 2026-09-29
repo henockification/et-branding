@@ -61,6 +61,121 @@ export class TelegramClient {
 		return body.result as T;
 	}
 
+	/**
+	 * The multipart twin of `call()`, for methods that upload a file. Same
+	 * envelope, same failure handling — only the body encoding differs.
+	 */
+	private async upload<T>(method: string, form: FormData): Promise<T> {
+		const response = await fetch(`${API_ROOT}/bot${this.token}/${method}`, {
+			method: "POST",
+			body: form,
+		});
+
+		const body = (await response.json()) as {
+			ok: boolean;
+			result?: T;
+			description?: string;
+			error_code?: number;
+		};
+
+		if (!body.ok) {
+			throw new TelegramError(
+				method,
+				body.description ?? `HTTP ${response.status}`,
+				body.error_code,
+			);
+		}
+
+		return body.result as T;
+	}
+
+	/**
+	 * Downloads a file someone sent the bot.
+	 *
+	 * Two steps because the Bot API only hands out a short-lived path, not the
+	 * bytes. Bots can fetch files up to 20 MB; a phone photo is far below that.
+	 */
+	async downloadFile(fileId: string): Promise<Uint8Array<ArrayBuffer>> {
+		const file = await this.call<{ file_path?: string }>("getFile", {
+			file_id: fileId,
+		});
+
+		if (!file.file_path) {
+			throw new TelegramError("getFile", "Telegram returned no file path.");
+		}
+
+		const response = await fetch(
+			`${API_ROOT}/file/bot${this.token}/${file.file_path}`,
+		);
+
+		if (!response.ok) {
+			throw new TelegramError(
+				"getFile",
+				`download failed: HTTP ${response.status}`,
+			);
+		}
+
+		return new Uint8Array(await response.arrayBuffer());
+	}
+
+	/** Uploads a JPEG. Telegram caps photos at 10 MB and 10,000px on both sides combined. */
+	sendPhoto(options: {
+		chatId: number;
+		photo: Uint8Array<ArrayBuffer>;
+		caption?: string;
+		replyMarkup?: ReplyMarkup;
+	}): Promise<{ message_id: number }> {
+		const form = new FormData();
+		form.set("chat_id", String(options.chatId));
+		form.set(
+			"photo",
+			new Blob([options.photo], { type: "image/jpeg" }),
+			"photo.jpg",
+		);
+		if (options.caption) {
+			form.set("caption", options.caption);
+			form.set("parse_mode", "HTML");
+		}
+		if (options.replyMarkup) {
+			form.set("reply_markup", JSON.stringify(options.replyMarkup));
+		}
+		return this.upload("sendPhoto", form);
+	}
+
+	/** Swaps the image in a photo message that is already in the chat. */
+	editMessagePhoto(options: {
+		chatId: number;
+		messageId: number;
+		photo: Uint8Array<ArrayBuffer>;
+		caption?: string;
+		replyMarkup?: ReplyMarkup;
+	}): Promise<unknown> {
+		const form = new FormData();
+		form.set("chat_id", String(options.chatId));
+		form.set("message_id", String(options.messageId));
+		// `attach://` points the media description at a part of this same upload.
+		form.set(
+			"media",
+			JSON.stringify({
+				type: "photo",
+				media: "attach://photo",
+				...(options.caption
+					? { caption: options.caption, parse_mode: "HTML" }
+					: {}),
+			}),
+		);
+		form.set(
+			"photo",
+			new Blob([options.photo], { type: "image/jpeg" }),
+			"photo.jpg",
+		);
+		form.set(
+			"reply_markup",
+			JSON.stringify(options.replyMarkup ?? { inline_keyboard: [] }),
+		);
+		return this.upload("editMessageMedia", form);
+	}
+
 	sendMessage(options: {
 		chatId: number;
 		text: string;
@@ -113,7 +228,7 @@ export class TelegramClient {
 
 	sendChatAction(options: {
 		chatId: number;
-		action: "typing";
+		action: "typing" | "upload_photo";
 	}): Promise<unknown> {
 		return this.call("sendChatAction", {
 			chat_id: options.chatId,

@@ -24,7 +24,7 @@ export type ModelTier =
 	| "premium";
 
 /** Who actually serves the model behind OpenRouter. Informational. */
-export type Vendor = "deepseek" | "openai" | "anthropic" | "qwen";
+export type Vendor = "deepseek" | "openai" | "anthropic" | "qwen" | "google";
 
 export type ModelSpec = {
 	/** OpenRouter model id, used verbatim in API calls. */
@@ -35,6 +35,8 @@ export type ModelSpec = {
 	/** Discounted rate for a prompt-cache hit, where the vendor offers one. */
 	readonly usdPerMillionCachedInput?: number;
 	readonly contextTokens: number;
+	/** True when the model accepts image parts. Text-only models reject them. */
+	readonly seesImages?: boolean;
 	readonly pricedOn: string;
 	readonly notes?: string;
 };
@@ -77,8 +79,20 @@ export const MODEL_CATALOG = {
 		usdPerMillionOutput: 0.6,
 		usdPerMillionCachedInput: 0.075,
 		contextTokens: 128_000,
+		seesImages: true,
 		pricedOn: "2026-09-26",
 		notes: "Comparison point; weaker at long-form brand copy.",
+	},
+	"google/gemini-2.5-flash-lite": {
+		id: "google/gemini-2.5-flash-lite",
+		vendor: "google",
+		usdPerMillionInput: 0.1,
+		usdPerMillionOutput: 0.4,
+		contextTokens: 1_048_576,
+		seesImages: true,
+		pricedOn: "2026-09-28",
+		notes:
+			"Cheapest dependable vision model. Gemini bills a photo as a few hundred tokens, so looking at one costs a fraction of a cent.",
 	},
 	"anthropic/claude-haiku-4.5": {
 		id: "anthropic/claude-haiku-4.5",
@@ -117,6 +131,15 @@ export const TIER_DEFAULTS: Record<ModelTier, ModelId> = {
 	balanced: "deepseek/deepseek-v3.2",
 	premium: "anthropic/claude-sonnet-4.5",
 };
+
+/**
+ * The model that looks at photos.
+ *
+ * Separate from the tiers because the cheap text tiers cannot see at all, and
+ * its only job is to describe a photo and choose light edits — the brand's
+ * voice is still written by the tier model. `ET_VISION_MODEL` overrides it.
+ */
+export const VISION_DEFAULT: ModelId = "google/gemini-2.5-flash-lite";
 
 export function getModelSpec(id: ModelId): ModelSpec {
 	return MODEL_CATALOG[id];
