@@ -201,7 +201,6 @@ export async function handlePhotoDraft(
 				draft.language.label,
 				`learning from ${learned}`,
 				untouched ? "photo already looked right" : "photo polished",
-				`$${usd.toFixed(6)}`,
 			].join(" · "),
 		};
 	} catch (error) {

@@ -121,7 +121,7 @@ export async function handleDraftCommand(command: DraftCommand): Promise<void> {
 		delivered = {
 			body,
 			itemId: item.id,
-			note: `${draft.language.label} · learning from ${learned} · $${draft.cost.usd.toFixed(6)}`,
+			note: `${draft.language.label} · learning from ${learned}`,
 		};
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

@@ -208,7 +208,6 @@ export async function runWeeklyPlan(options: {
 			...post,
 			id: saved[index]?.id ?? "",
 		})),
-		usd: plan.cost.usd,
 	});
 
 	return { status: "sent", posts: saved.length, usd: plan.cost.usd };
@@ -218,7 +217,6 @@ async function deliver(input: {
 	recipients: number[];
 	brandName: string;
 	posts: { id: string; day: string; angle: string; body: string }[];
-	usd: number;
 }): Promise<void> {
 	const telegram = getTelegram();
 
@@ -229,7 +227,6 @@ async function deliver(input: {
 				text: [
 					`<b>This week for ${escapeHtml(input.brandName)}</b>`,
 					`${input.posts.length} posts, waiting on you. Approve, edit or reject each one.`,
-					`<i>$${input.usd.toFixed(6)}</i>`,
 				].join("\n"),
 			})
 			.catch(() => {});

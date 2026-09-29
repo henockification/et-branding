@@ -165,11 +165,7 @@ export async function refineDraft(
 			chatId: request.chatId,
 			messageId: request.messageId,
 			text: truncateForTelegram(
-				[
-					escapeHtml(body),
-					"",
-					draftFooter(item.id, `rewritten · $${rewritten.cost.usd.toFixed(6)}`),
-				].join("\n"),
+				[escapeHtml(body), "", draftFooter(item.id, "rewritten")].join("\n"),
 			),
 			// Re-passed deliberately: editMessageText defaults to an empty keyboard,
 			// so omitting this would strip Approve/Edit/Reject off the draft.

@@ -19,6 +19,7 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getViewer, requireAdmin } from "#/server/access";
+import { fail } from "#/server/errors";
 import { issueInvite, withdrawInvite } from "#/server/invite-core";
 
 /**
@@ -40,7 +41,7 @@ function monthStart(now = new Date()): Date {
 
 /**
  * Returns rather than throws for a non-admin: this feeds a page loader, where
- * a thrown Response escapes as a raw 500 instead of the app's not-found page.
+ * an error would escape as a raw failure instead of the app's not-found page.
  */
 export const fetchAdminConsole = createServerFn({ method: "GET" }).handler(
 	async () => {
@@ -220,7 +221,7 @@ export const createWorkspace = createServerFn({ method: "POST" })
 			.returning({ id: organization.id });
 
 		if (!created) {
-			throw new Response("Could not create that workspace.", { status: 500 });
+			fail("Could not create that workspace.", 500);
 		}
 
 		await db

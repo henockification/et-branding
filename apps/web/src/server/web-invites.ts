@@ -20,6 +20,7 @@ import {
 	requireAccess,
 	requireViewer,
 } from "#/server/access";
+import { fail } from "#/server/errors";
 import {
 	issueInvite,
 	openInviteFilter,
@@ -95,15 +96,15 @@ export const createWebInvite = createServerFn({ method: "POST" })
 		const seats = await seatUsage(data.orgId);
 
 		if (!seats.teamInvitesEnabled) {
-			throw new Response(
+			fail(
 				"Team invites are turned off for this workspace. Contact your account manager.",
-				{ status: 403 },
+				403,
 			);
 		}
 		if (seats.limit !== null && seats.used >= seats.limit) {
-			throw new Response(
+			fail(
 				`This workspace has used all ${seats.limit} seats. Remove someone or ask for more seats.`,
-				{ status: 403 },
+				403,
 			);
 		}
 
@@ -142,9 +143,9 @@ async function assertKeepsAnOwner(orgId: string, memberId: string) {
 		);
 
 	if (others === 0) {
-		throw new Response(
+		fail(
 			"This is the workspace's only owner. Make someone else an owner first.",
-			{ status: 409 },
+			409,
 		);
 	}
 }
@@ -271,7 +272,7 @@ export const acceptInvite = createServerFn({ method: "POST" })
 		const { status, invite } = await findInvite(data.token);
 
 		if (!invite || status !== "open") {
-			throw new Response(
+			fail(
 				status === "expired"
 					? "This invite has expired. Ask for a new one."
 					: status === "revoked"
@@ -281,14 +282,14 @@ export const acceptInvite = createServerFn({ method: "POST" })
 							: status === "suspended"
 								? "This workspace is suspended at the moment."
 								: "This invite link is not valid.",
-				{ status: 410 },
+				410,
 			);
 		}
 
 		if (invite.email.toLowerCase() !== viewer.email.toLowerCase()) {
-			throw new Response(
+			fail(
 				`This invite is for ${invite.email}, but you are signed in as ${viewer.email}. Sign out and use that address.`,
-				{ status: 403 },
+				403,
 			);
 		}
 

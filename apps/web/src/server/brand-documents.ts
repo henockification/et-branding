@@ -2,6 +2,7 @@ import { and, brandDocument, desc, eq, getDb, sql } from "@et/db";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { readAccess, requireAccess } from "#/server/access";
+import { fail } from "#/server/errors";
 import {
 	MAX_DOCUMENTS,
 	MAX_LENGTH,
@@ -72,9 +73,7 @@ export const addPastPost = createServerFn({ method: "POST" })
 			)
 			.limit(1);
 		if (existing) {
-			throw new Response("That post is already in the brain.", {
-				status: 409,
-			});
+			fail("That post is already in the brain.", 409);
 		}
 
 		const [{ count }] = await db
@@ -87,9 +86,9 @@ export const addPastPost = createServerFn({ method: "POST" })
 				),
 			);
 		if (count >= MAX_DOCUMENTS) {
-			throw new Response(
+			fail(
 				`The brain already holds ${MAX_DOCUMENTS} posts. Remove some before adding more.`,
-				{ status: 409 },
+				409,
 			);
 		}
 

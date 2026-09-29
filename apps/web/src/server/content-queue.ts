@@ -12,6 +12,7 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { readAccess, requireAccess } from "#/server/access";
+import { fail } from "#/server/errors";
 
 const STATUSES = ["draft", "approved", "rejected", "published"] as const;
 const ORIGINS = ["ad_hoc", "weekly_plan"] as const;
@@ -180,7 +181,7 @@ export const decideDraft = createServerFn({ method: "POST" })
 			.returning({ id: contentItem.id });
 
 		if (!decided) {
-			throw new Response("That draft was already decided.", { status: 409 });
+			fail("That draft was already decided.", 409);
 		}
 
 		return { status: data.decision };
@@ -215,10 +216,10 @@ export const editDraft = createServerFn({ method: "POST" })
 			)
 			.limit(1);
 
-		if (!item) throw new Response("Not found.", { status: 404 });
+		if (!item) fail("Not found.", 404);
 
 		if (item.status === "published") {
-			throw new Response("That post is already out.", { status: 409 });
+			fail("That post is already out.", 409);
 		}
 
 		if (item.body.trim() === data.body) return { status: item.status };

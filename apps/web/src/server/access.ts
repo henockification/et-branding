@@ -1,6 +1,7 @@
 import { and, eq, getDb, organization, orgMember } from "@et/db";
 import { getRequest } from "@tanstack/react-start/server";
 import { getAuth } from "#/server/auth";
+import { fail } from "#/server/errors";
 import { isPlatformAdmin } from "#/server/sign-up-policy";
 
 /**
@@ -87,8 +88,9 @@ export async function readAccess(
 }
 
 /**
- * For mutations: throws a `Response` rather than returning null. A page loader
- * should use `readAccess` instead — a thrown Response there escapes as a 500.
+ * For mutations: throws a `RequestError` rather than returning null, so the
+ * reason reaches the screen. A page loader should use `readAccess` instead and
+ * turn null into the app's not-found page.
  */
 export async function requireAccess(
 	orgId: string,
@@ -98,20 +100,16 @@ export async function requireAccess(
 
 	if (!access) {
 		// Same answer for "not yours" and "does not exist".
-		throw new Response("Not found.", { status: 404 });
+		fail("Not found.", 404);
 	}
 
 	if (need === "edit" && !access.canEdit) {
-		throw new Response("Only an owner or approver can change this.", {
-			status: 403,
-		});
+		fail("Only an owner or approver can change this.", 403);
 	}
 
 	// Managing people is the owners' job alone.
 	if (need === "manage" && access.role !== "owner") {
-		throw new Response("Only a workspace owner can manage its people.", {
-			status: 403,
-		});
+		fail("Only a workspace owner can manage its people.", 403);
 	}
 
 	return access;
@@ -119,14 +117,14 @@ export async function requireAccess(
 
 export async function requireViewer(): Promise<Viewer> {
 	const viewer = await getViewer();
-	if (!viewer) throw new Response("Not signed in.", { status: 401 });
+	if (!viewer) fail("Not signed in.", 401);
 	return viewer;
 }
 
 export async function requireAdmin(): Promise<Viewer> {
 	const viewer = await requireViewer();
 	if (!viewer.isAdmin) {
-		throw new Response("Only the platform admin can do that.", { status: 403 });
+		fail("Only the platform admin can do that.", 403);
 	}
 	return viewer;
 }

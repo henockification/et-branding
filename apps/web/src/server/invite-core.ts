@@ -15,6 +15,7 @@ import {
 } from "@et/db";
 import { workspaceInviteEmail } from "@et/email";
 import { resolveEmailSender } from "#/server/email";
+import { fail } from "#/server/errors";
 import { hashToken } from "#/server/sign-up-policy";
 
 /**
@@ -110,7 +111,7 @@ export async function issueInvite(input: {
 		.from(organization)
 		.where(eq(organization.id, input.orgId))
 		.limit(1);
-	if (!org) throw new Response("Not found.", { status: 404 });
+	if (!org) fail("Not found.", 404);
 
 	const [existing] = await db
 		.select({ id: orgMember.id })
@@ -124,9 +125,7 @@ export async function issueInvite(input: {
 		)
 		.limit(1);
 	if (existing) {
-		throw new Response(`${email} is already in this workspace.`, {
-			status: 409,
-		});
+		fail(`${email} is already in this workspace.`, 409);
 	}
 
 	const token = newToken();
