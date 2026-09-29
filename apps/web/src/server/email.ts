@@ -2,6 +2,7 @@ import { BRANDING } from "@et/core";
 import {
 	createCloudflareSender,
 	createConsoleSender,
+	createResendSender,
 	type EmailSender,
 	type SendEmailBinding,
 } from "@et/email";
@@ -9,27 +10,41 @@ import {
 /**
  * Pick a sender for this environment.
  *
- * Cloudflare Email Service only accepts a `from` on a domain onboarded with
- * `wrangler email sending enable`, so it is used when both the binding and
- * EMAIL_FROM are present. Otherwise mail is printed to the log — the flow
- * still works end to end, it just does not leave the machine.
+ * Resend when its key is set, then Cloudflare Email Service when its binding
+ * is usable, and otherwise the log — so password reset and invites still work
+ * end to end on a machine that cannot send, and say plainly that nothing left.
+ *
+ * Every real sender needs EMAIL_FROM on a domain it has verified.
  */
 export function resolveEmailSender(env: unknown): EmailSender {
 	const from = process.env.EMAIL_FROM;
-	const binding = emailBinding(env);
+	if (!from) return createConsoleSender();
 
-	if (!from || !binding) {
-		return createConsoleSender();
+	const replyTo = process.env.EMAIL_REPLY_TO
+		? { replyTo: process.env.EMAIL_REPLY_TO }
+		: {};
+
+	const resendKey = process.env.RESEND_API_KEY;
+	if (resendKey) {
+		return createResendSender({
+			apiKey: resendKey,
+			from,
+			fromName: BRANDING.name,
+			...replyTo,
+		});
 	}
 
-	return createCloudflareSender({
-		binding,
-		from,
-		fromName: BRANDING.name,
-		...(process.env.EMAIL_REPLY_TO
-			? { replyTo: process.env.EMAIL_REPLY_TO }
-			: {}),
-	});
+	const binding = emailBinding(env);
+	if (binding) {
+		return createCloudflareSender({
+			binding,
+			from,
+			fromName: BRANDING.name,
+			...replyTo,
+		});
+	}
+
+	return createConsoleSender();
 }
 
 /**

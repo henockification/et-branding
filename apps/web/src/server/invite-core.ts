@@ -162,10 +162,11 @@ export async function issueInvite(input: {
 
 	// Only claim it was emailed when a real sender exists; the console sender
 	// "succeeds" without anything leaving the machine.
+	const sender = resolveEmailSender(workerEnv);
 	let emailed = false;
-	if (process.env.EMAIL_FROM) {
+	if (sender.kind !== "console") {
 		try {
-			await resolveEmailSender(workerEnv).send(
+			await sender.send(
 				workspaceInviteEmail({
 					to: email,
 					url,

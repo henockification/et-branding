@@ -31,6 +31,11 @@ GOOGLE_CLIENT_SECRET=""
 PLATFORM_ADMIN_EMAILS=""
 
 # --- Email ----------------------------------------------------------------
+# Resend is used when RESEND_API_KEY is set (a send-only key is enough), with
+# EMAIL_FROM on a domain verified in Resend, e.g. hello@yourdomain.com.
+RESEND_API_KEY=""
+#
+# Otherwise:
 # Cloudflare Email Service. Password reset only actually sends once EMAIL_FROM
 # is on a domain onboarded onto Email Sending:
 #   pnpm --filter @et/web exec wrangler email sending enable yourdomain.com

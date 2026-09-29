@@ -7,6 +7,6 @@ export type EmailMessage = {
 };
 
 export interface EmailSender {
-	readonly kind: "cloudflare" | "console";
+	readonly kind: "resend" | "cloudflare" | "console";
 	send(message: EmailMessage): Promise<void>;
 }

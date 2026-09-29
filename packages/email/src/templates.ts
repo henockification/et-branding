@@ -11,6 +11,30 @@ import type { EmailMessage } from "./types.ts";
  */
 const BRAND = BRANDING.themeColor;
 
+/**
+ * Logo and name at the top of every email.
+ *
+ * The logo is a PNG served by the app itself — Gmail and Outlook drop SVG —
+ * and its address comes from the link the email already carries, so the
+ * templates need no configuration and always point at the deployment that sent
+ * them. Without a link there is no safe origin, so the name stands alone.
+ */
+function brandHeader(href?: string): string {
+	let logo = "";
+	try {
+		if (href) {
+			const src = `${new URL(href).origin}/brand/email-logo.png`;
+			logo = `<img src="${src}" width="32" height="32" alt="" style="display:block;border:0;border-radius:8px">`;
+		}
+	} catch {
+		// A malformed link: skip the logo rather than fail the email.
+	}
+
+	return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px"><tr>
+${logo ? `<td style="padding-right:10px;vertical-align:middle">${logo}</td>` : ""}<td style="vertical-align:middle;font-size:15px;font-weight:700;color:#160935">${BRANDING.name}</td>
+</tr></table>`;
+}
+
 function layout(
 	heading: string,
 	body: string,
@@ -21,7 +45,7 @@ function layout(
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
 <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border:1px solid #ddd3f5;border-radius:12px;padding:24px">
 <tr><td>
-<p style="margin:0 0 16px;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${BRAND}">${BRANDING.name}</p>
+${brandHeader(action?.href)}
 <h1 style="margin:0 0 16px;font-size:24px;line-height:1.2;color:#160935">${heading}</h1>
 <div style="margin:0 0 24px;font-size:15px;line-height:23px;color:#5e5478">${body}</div>
 ${
@@ -31,6 +55,7 @@ ${
 		: ""
 }
 </td></tr></table>
+<p style="margin:16px 0 0;font-size:12px;line-height:18px;color:#8a80a3">${BRANDING.name} · ${BRANDING.tagline}</p>
 </td></tr></table>
 </body></html>`;
 }
