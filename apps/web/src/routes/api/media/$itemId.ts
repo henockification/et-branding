@@ -1,6 +1,6 @@
-import { and, contentItem, eq, getDb, orgMember } from "@et/db";
+import { contentItem, eq, getDb } from "@et/db";
 import { createFileRoute } from "@tanstack/react-router";
-import { getAuth } from "#/server/auth";
+import { readAccess } from "#/server/access";
 import { photoResponse } from "#/server/media";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -23,25 +23,18 @@ export const Route = createFileRoute("/api/media/$itemId")({
 
 				if (!UUID.test(params.itemId)) return notFound();
 
-				const session = await getAuth().api.getSession({
-					headers: request.headers,
-				});
-				if (!session) return new Response("Unauthorized", { status: 401 });
-
 				const [item] = await getDb()
-					.select({ media: contentItem.media })
+					.select({ orgId: contentItem.orgId, media: contentItem.media })
 					.from(contentItem)
-					.innerJoin(
-						orgMember,
-						and(
-							eq(orgMember.orgId, contentItem.orgId),
-							eq(orgMember.userId, session.user.id),
-						),
-					)
 					.where(eq(contentItem.id, params.itemId))
 					.limit(1);
 
-				const photo = item?.media?.find((media) => media.kind === "photo");
+				// Access is checked against the draft's own workspace.
+				if (!item || !(await readAccess(item.orgId, request.headers))) {
+					return notFound();
+				}
+
+				const photo = item.media?.find((media) => media.kind === "photo");
 				if (!photo) return notFound();
 
 				const requested = new URL(request.url).searchParams.get("version");

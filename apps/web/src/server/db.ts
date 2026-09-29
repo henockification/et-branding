@@ -1,5 +1,6 @@
 import { getDb, pingDatabase } from "@et/db";
 import { createServerFn } from "@tanstack/react-start";
+import { requireAdmin } from "#/server/access";
 
 /**
  * Proves the Neon connection without asserting anything about the schema —
@@ -7,6 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
  */
 export const checkDatabase = createServerFn({ method: "GET" }).handler(
 	async () => {
+		await requireAdmin();
 		try {
 			const ok = await pingDatabase(getDb());
 			return { ok, error: null as string | null };

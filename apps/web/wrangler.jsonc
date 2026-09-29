@@ -19,8 +19,8 @@
   "send_email": [{ "name": "EMAIL" }],
   // Photos sent to the bot: the original and the polished copy, both private.
   // Create once per account:
-  //   pnpm --filter @et/web exec wrangler r2 bucket create negarit-branding-media
-  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "negarit-branding-media" }],
+  //   pnpm --filter @et/web exec wrangler r2 bucket create negarit
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "negarit" }],
   // Applies the light photo polish (exposure, contrast, sharpen, crop).
   // Remote even in dev: the local stand-in only resizes and silently ignores
   // brightness, contrast, gamma, saturation and sharpen — the whole point.

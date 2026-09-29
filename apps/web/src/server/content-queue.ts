@@ -10,9 +10,8 @@ import {
 	sql,
 } from "@et/db";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
-import { getAuth } from "#/server/auth";
+import { readAccess, requireAccess } from "#/server/access";
 
 const STATUSES = ["draft", "approved", "rejected", "published"] as const;
 const ORIGINS = ["ad_hoc", "weekly_plan"] as const;
@@ -21,35 +20,6 @@ export type ContentOrigin = (typeof ORIGINS)[number];
 
 /** One page of history. Long enough to judge a trend, short enough to load. */
 const PAGE_SIZE = 50;
-
-/**
- * Whether the caller may read this workspace.
- *
- * Returns rather than throws. A thrown `Response` works for a mutation, but a
- * page loader that throws one escapes as an unhandled 500 and the visitor sees
- * raw JSON instead of the app — so loaders return a result the route can turn
- * into a proper not-found.
- *
- * "Not a member" and "no such workspace" are the same answer, so a response
- * never confirms an id is real.
- */
-async function canRead(orgId: string): Promise<boolean> {
-	const session = await getAuth().api.getSession({
-		headers: getRequest().headers,
-	});
-
-	if (!session) return false;
-
-	const [membership] = await getDb()
-		.select({ role: orgMember.role })
-		.from(orgMember)
-		.where(
-			and(eq(orgMember.orgId, orgId), eq(orgMember.userId, session.user.id)),
-		)
-		.limit(1);
-
-	return Boolean(membership);
-}
 
 export const fetchContentQueue = createServerFn({ method: "GET" })
 	.validator(
@@ -60,9 +30,8 @@ export const fetchContentQueue = createServerFn({ method: "GET" })
 		}),
 	)
 	.handler(async ({ data }) => {
-		if (!(await canRead(data.orgId))) {
-			return { found: false } as const;
-		}
+		const access = await readAccess(data.orgId);
+		if (!access) return { found: false } as const;
 
 		const db = getDb();
 
@@ -142,6 +111,7 @@ export const fetchContentQueue = createServerFn({ method: "GET" })
 		return {
 			found: true as const,
 			orgName: org.name,
+			canEdit: access.canEdit,
 			items,
 			counts: Object.fromEntries(
 				counts.map((c) => [c.status, c.count]),
@@ -157,4 +127,113 @@ export const fetchContentQueue = createServerFn({ method: "GET" })
 				silentRejections: 0,
 			},
 		};
+	});
+
+/** Same bounds as a correction sent from Telegram. */
+const MIN_EDIT_LENGTH = 10;
+const MAX_EDIT_LENGTH = 3000;
+
+const itemSchema = z.object({
+	orgId: z.string().uuid(),
+	itemId: z.string().uuid(),
+});
+
+/**
+ * Approve or reject a draft from the web.
+ *
+ * Writes exactly what the Telegram buttons write — status, who, when, and an
+ * optional reason — because these rows are what the agents learn from, and a
+ * decision made on the web must teach the same lesson as one made in the chat.
+ *
+ * Only an undecided draft can be decided, so a web click and a Telegram tap
+ * landing together cannot both win.
+ */
+export const decideDraft = createServerFn({ method: "POST" })
+	.validator(
+		itemSchema.extend({
+			decision: z.enum(["approved", "rejected"]),
+			reason: z.string().trim().max(1000).optional(),
+		}),
+	)
+	.handler(async ({ data }) => {
+		const access = await requireAccess(data.orgId, "edit");
+
+		const [decided] = await getDb()
+			.update(contentItem)
+			.set({
+				status: data.decision,
+				reviewedBy: access.memberId,
+				reviewedAt: new Date(),
+				// A reason is only kept for a rejection, where it teaches something.
+				...(data.decision === "rejected" && data.reason
+					? { feedback: data.reason }
+					: {}),
+				updatedAt: new Date(),
+			})
+			.where(
+				and(
+					eq(contentItem.id, data.itemId),
+					eq(contentItem.orgId, data.orgId),
+					eq(contentItem.status, "draft"),
+				),
+			)
+			.returning({ id: contentItem.id });
+
+		if (!decided) {
+			throw new Response("That draft was already decided.", { status: 409 });
+		}
+
+		return { status: data.decision };
+	});
+
+/**
+ * Save a human's version of a draft, approving it in the same act.
+ *
+ * Keeps the agent's first attempt in `originalBody`: the pair — what the agent
+ * wrote and what a person changed it to — is the strongest signal the agents
+ * get, exactly as with an edit sent from Telegram.
+ */
+export const editDraft = createServerFn({ method: "POST" })
+	.validator(
+		itemSchema.extend({
+			body: z.string().trim().min(MIN_EDIT_LENGTH).max(MAX_EDIT_LENGTH),
+		}),
+	)
+	.handler(async ({ data }) => {
+		const access = await requireAccess(data.orgId, "edit");
+		const db = getDb();
+
+		const [item] = await db
+			.select({
+				body: contentItem.body,
+				originalBody: contentItem.originalBody,
+				status: contentItem.status,
+			})
+			.from(contentItem)
+			.where(
+				and(eq(contentItem.id, data.itemId), eq(contentItem.orgId, data.orgId)),
+			)
+			.limit(1);
+
+		if (!item) throw new Response("Not found.", { status: 404 });
+
+		if (item.status === "published") {
+			throw new Response("That post is already out.", { status: 409 });
+		}
+
+		if (item.body.trim() === data.body) return { status: item.status };
+
+		await db
+			.update(contentItem)
+			.set({
+				body: data.body,
+				status: "approved",
+				originalBody: item.originalBody ?? item.body,
+				reviewedBy: access.memberId,
+				reviewedAt: new Date(),
+				updatedAt: new Date(),
+			})
+			.where(eq(contentItem.id, data.itemId));
+
+		return { status: "approved" as const };
 	});

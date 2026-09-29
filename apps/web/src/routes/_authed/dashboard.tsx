@@ -1,11 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { Button } from "#/components/ui/button";
-import { Input } from "#/components/ui/input";
-import { Label } from "#/components/ui/label";
 import { createTelegramInvite } from "#/server/invites";
-import { createOrganization, listOrganizations } from "#/server/organizations";
+import { listOrganizations } from "#/server/organizations";
 
 export const Route = createFileRoute("/_authed/dashboard")({
 	loader: () => listOrganizations(),
@@ -59,7 +56,6 @@ function InviteButton({ orgId }: { orgId: string }) {
 
 function Dashboard() {
 	const { user } = Route.useRouteContext();
-	const queryClient = useQueryClient();
 
 	const organizations = useQuery({
 		queryKey: ["organizations"],
@@ -67,16 +63,7 @@ function Dashboard() {
 		initialData: Route.useLoaderData(),
 	});
 
-	const [name, setName] = useState("");
-
-	const create = useMutation({
-		mutationFn: (value: string) =>
-			createOrganization({ data: { name: value } }),
-		onSuccess: () => {
-			setName("");
-			queryClient.invalidateQueries({ queryKey: ["organizations"] });
-		},
-	});
+	const { isAdmin, organizations: workspaces } = organizations.data;
 
 	return (
 		<main className="page-wrap space-y-brand-12 py-brand-12">
@@ -89,47 +76,24 @@ function Dashboard() {
 					Each workspace is one organization with one brand. The agent team
 					works inside a workspace, and everything it produces belongs to it.
 				</p>
-			</header>
-
-			<section className="space-y-brand-4">
-				<form
-					className="flex flex-wrap items-end gap-brand-4"
-					onSubmit={(event) => {
-						event.preventDefault();
-						if (name.trim()) create.mutate(name.trim());
-					}}
-				>
-					<div className="min-w-56 flex-1 space-y-2">
-						<Label htmlFor="org-name">Add a workspace</Label>
-						<Input
-							id="org-name"
-							value={name}
-							placeholder="Bunna Coffee"
-							maxLength={80}
-							onChange={(event) => setName(event.target.value)}
-						/>
-					</div>
-					<Button type="submit" disabled={create.isPending || !name.trim()}>
-						{create.isPending ? "Adding…" : "Add workspace"}
-					</Button>
-				</form>
-
-				{create.isError ? (
-					<p className="type-caption text-destructive">
-						{create.error.message}
+				{isAdmin ? (
+					<p className="type-body">
+						<Link to="/admin">Admin console</Link> — create workspaces, and
+						manage clients, billing and suspensions.
 					</p>
 				) : null}
-			</section>
+			</header>
 
 			<section>
-				{organizations.data.length === 0 ? (
+				{workspaces.length === 0 ? (
 					<p className="type-body text-muted-foreground">
-						No workspaces yet. Add one above and the agent team has a brand to
-						work on.
+						{isAdmin
+							? "You are not in any workspace yourself. Create one of your own from the admin console."
+							: "You are not in a workspace yet. Open the invite link you were sent, or ask whoever runs your brand here to invite you."}
 					</p>
 				) : (
 					<ul className="grid gap-brand-4 sm:grid-cols-2">
-						{organizations.data.map((org) => (
+						{workspaces.map((org) => (
 							<li key={org.id} className="rounded-lg border bg-card p-brand-6">
 								<div className="flex items-start justify-between gap-2">
 									<h2 className="type-title">{org.brandName ?? org.name}</h2>
@@ -137,20 +101,47 @@ function Dashboard() {
 										{org.role}
 									</span>
 								</div>
-								<p className="type-caption text-muted-foreground">
-									{org.brandSummary ??
-										"No brand summary yet — the Brain is empty."}
-								</p>
-								<p className="mt-2 type-caption">
-									<Link to="/workspace/$orgId" params={{ orgId: org.id }}>
-										Brand brain
-									</Link>
-									{" · "}
-									<Link to="/content/$orgId" params={{ orgId: org.id }}>
-										Content
-									</Link>
-								</p>
-								{org.role === "member" ? null : <InviteButton orgId={org.id} />}
+
+								{org.status === "suspended" ? (
+									<div className="mt-2 space-y-1">
+										<p className="type-caption text-destructive">
+											Suspended — nothing here opens until it is reactivated.
+											Your content is kept.
+										</p>
+										{org.suspendedReason ? (
+											<p className="type-caption text-muted-foreground">
+												{org.suspendedReason}
+											</p>
+										) : null}
+									</div>
+								) : (
+									<>
+										<p className="type-caption text-muted-foreground">
+											{org.brandSummary ??
+												"No brand summary yet — the Brain is empty."}
+										</p>
+										<p className="mt-2 type-caption">
+											<Link to="/workspace/$orgId" params={{ orgId: org.id }}>
+												Brand brain
+											</Link>
+											{" · "}
+											<Link to="/content/$orgId" params={{ orgId: org.id }}>
+												Content
+											</Link>
+											{" · "}
+											<Link
+												to="/workspace/$orgId"
+												params={{ orgId: org.id }}
+												hash="people"
+											>
+												People
+											</Link>
+										</p>
+										{org.role === "owner" ? (
+											<InviteButton orgId={org.id} />
+										) : null}
+									</>
+								)}
 							</li>
 						))}
 					</ul>

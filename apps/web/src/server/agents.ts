@@ -1,6 +1,7 @@
 import { defineAgent, estimateCost, listModelSpecs } from "@et/agents";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireAdmin } from "#/server/access";
 
 /**
  * Server-only: agents run here, never in the browser. Provider API keys stay in
@@ -22,6 +23,8 @@ const promptInput = z.object({
 export const runSmokeAgent = createServerFn({ method: "POST" })
 	.validator(promptInput)
 	.handler(async ({ data }) => {
+		// A paid model call: never open to the public internet.
+		await requireAdmin();
 		const { output, cost } = await smokeAgent.run(data.prompt);
 		return {
 			modelId: smokeAgent.modelId,

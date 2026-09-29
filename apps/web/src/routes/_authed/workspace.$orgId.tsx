@@ -2,6 +2,8 @@ import { linesToList, listToLines, profileCompleteness } from "@et/core";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
+import { PastPosts } from "#/components/past-posts";
+import { People } from "#/components/people";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
@@ -20,7 +22,7 @@ export const Route = createFileRoute("/_authed/workspace/$orgId")({
 function WorkspaceBrand() {
 	const { orgId } = Route.useParams();
 	const loaded = Route.useLoaderData();
-	const readOnly = loaded.role === "member";
+	const readOnly = !loaded.canEdit;
 
 	const [name, setName] = useState(loaded.name);
 	const [summary, setSummary] = useState(loaded.summary);
@@ -211,6 +213,10 @@ function WorkspaceBrand() {
 					</div>
 				)}
 			</form>
+
+			<PastPosts orgId={orgId} />
+
+			<People orgId={orgId} />
 		</main>
 	);
 }

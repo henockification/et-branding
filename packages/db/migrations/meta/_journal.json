@@ -43,6 +43,13 @@
       "when": 1790433707671,
       "tag": "0005_flippant_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790661847096,
+      "tag": "0006_workspace_admin",
+      "breakpoints": true
     }
   ]
 }

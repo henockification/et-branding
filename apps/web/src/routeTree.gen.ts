@@ -15,8 +15,10 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedDashboardRouteImport } from './routes/_authed/dashboard'
 import { Route as DevHealthRouteImport } from './routes/dev/health'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AuthedContentOrgIdRouteImport } from './routes/_authed/content.$orgId'
 import { Route as AuthedWorkspaceOrgIdRouteImport } from './routes/_authed/workspace.$orgId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -52,6 +54,11 @@ const SignUpRoute = SignUpRouteImport.update({
   path: '/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedAdminRoute = AuthedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedDashboardRoute = AuthedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -60,6 +67,11 @@ const AuthedDashboardRoute = AuthedDashboardRouteImport.update({
 const DevHealthRoute = DevHealthRouteImport.update({
   id: '/dev/health',
   path: '/dev/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedContentOrgIdRoute = AuthedContentOrgIdRouteImport.update({
@@ -94,8 +106,10 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/admin': typeof AuthedAdminRoute
   '/dashboard': typeof AuthedDashboardRoute
   '/dev/health': typeof DevHealthRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/content/$orgId': typeof AuthedContentOrgIdRoute
   '/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -108,8 +122,10 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/admin': typeof AuthedAdminRoute
   '/dashboard': typeof AuthedDashboardRoute
   '/dev/health': typeof DevHealthRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/content/$orgId': typeof AuthedContentOrgIdRoute
   '/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -124,8 +140,10 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/_authed/admin': typeof AuthedAdminRoute
   '/_authed/dashboard': typeof AuthedDashboardRoute
   '/dev/health': typeof DevHealthRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/_authed/content/$orgId': typeof AuthedContentOrgIdRoute
   '/_authed/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -140,8 +158,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/admin'
     | '/dashboard'
     | '/dev/health'
+    | '/invite/$token'
     | '/content/$orgId'
     | '/workspace/$orgId'
     | '/api/auth/$'
@@ -154,8 +174,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/admin'
     | '/dashboard'
     | '/dev/health'
+    | '/invite/$token'
     | '/content/$orgId'
     | '/workspace/$orgId'
     | '/api/auth/$'
@@ -169,8 +191,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/_authed/admin'
     | '/_authed/dashboard'
     | '/dev/health'
+    | '/invite/$token'
     | '/_authed/content/$orgId'
     | '/_authed/workspace/$orgId'
     | '/api/auth/$'
@@ -186,6 +210,7 @@ export interface RootRouteChildren {
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
   DevHealthRoute: typeof DevHealthRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMediaItemIdRoute: typeof ApiMediaItemIdRoute
   ApiTelegramWebhookRoute: typeof ApiTelegramWebhookRoute
@@ -235,6 +260,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignUpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/admin': {
+      id: '/_authed/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthedAdminRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/dashboard': {
       id: '/_authed/dashboard'
       path: '/dashboard'
@@ -247,6 +279,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/health'
       fullPath: '/dev/health'
       preLoaderRoute: typeof DevHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed/content/$orgId': {
@@ -288,12 +327,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedRouteChildren {
+  AuthedAdminRoute: typeof AuthedAdminRoute
   AuthedDashboardRoute: typeof AuthedDashboardRoute
   AuthedContentOrgIdRoute: typeof AuthedContentOrgIdRoute
   AuthedWorkspaceOrgIdRoute: typeof AuthedWorkspaceOrgIdRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedAdminRoute: AuthedAdminRoute,
   AuthedDashboardRoute: AuthedDashboardRoute,
   AuthedContentOrgIdRoute: AuthedContentOrgIdRoute,
   AuthedWorkspaceOrgIdRoute: AuthedWorkspaceOrgIdRoute,
@@ -310,6 +351,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
   DevHealthRoute: DevHealthRoute,
+  InviteTokenRoute: InviteTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMediaItemIdRoute: ApiMediaItemIdRoute,
   ApiTelegramWebhookRoute: ApiTelegramWebhookRoute,

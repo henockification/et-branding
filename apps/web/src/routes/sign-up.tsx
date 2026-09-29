@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
+import { z } from "zod";
 import { AuthCard, FieldError } from "#/components/auth-card";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
@@ -10,17 +11,29 @@ import { fetchAuthProviders } from "#/server/session";
 /** Matches `minPasswordLength` in the Better Auth config. */
 const MIN_PASSWORD_LENGTH = 12;
 
+const searchSchema = z.object({
+	/** An invite token: after sign-up, the person lands back on the invite. */
+	invite: z.string().optional(),
+	/** The invited address, pre-filled. The server enforces it either way. */
+	email: z.string().optional(),
+});
+
 export const Route = createFileRoute("/sign-up")({
+	validateSearch: searchSchema,
 	loader: () => fetchAuthProviders(),
 	component: SignUp,
 });
 
 function SignUp() {
 	const providers = Route.useLoaderData();
+	const search = Route.useSearch();
 	const router = useRouter();
 
+	// Accounts are by invitation; an invite brings the person back to accept it.
+	const destination = search.invite ? `/invite/${search.invite}` : "/dashboard";
+
 	const [name, setName] = useState("");
-	const [email, setEmail] = useState("");
+	const [email, setEmail] = useState(search.email ?? "");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
@@ -47,13 +60,19 @@ function SignUp() {
 			return;
 		}
 
-		router.navigate({ href: "/dashboard", reloadDocument: true });
+		router.navigate({ href: destination, reloadDocument: true });
 	}
 
 	return (
 		<AuthCard
-			title="Start a brand"
-			subtitle="Create an account and put the agent team to work."
+			title={
+				search.invite ? "Create your account" : "Accounts are by invitation"
+			}
+			subtitle={
+				search.invite
+					? "Then you are straight into your workspace."
+					: "Open the invite link you were sent to create your account. Already have one? Sign in."
+			}
 			footer={
 				<>
 					Already have an account? <Link to="/sign-in">Sign in</Link>.
@@ -66,7 +85,7 @@ function SignUp() {
 						variant="secondary"
 						className="w-full"
 						onClick={() =>
-							signIn.social({ provider: "google", callbackURL: "/dashboard" })
+							signIn.social({ provider: "google", callbackURL: destination })
 						}
 					>
 						Continue with Google
@@ -98,6 +117,8 @@ function SignUp() {
 						type="email"
 						autoComplete="email"
 						required
+						// The invite is for one address; changing it would only fail.
+						readOnly={Boolean(search.invite && search.email)}
 						value={email}
 						onChange={(event) => setEmail(event.target.value)}
 					/>

@@ -1,48 +1,36 @@
-import { and, eq, getDb, orgMember } from "@et/db";
 import {
 	createInviteToken,
 	INVITE_TTL_MINUTES,
 	inviteLink,
 } from "@et/telegram";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
-import { getAuth } from "#/server/auth";
+import { requireAccess } from "#/server/access";
+import { seatUsage } from "#/server/invite-core";
 import { inviteSecret } from "#/server/telegram/client";
 
 /**
  * Mints a Telegram invite for a workspace.
  *
- * Owners and approvers only: an invite is the thing that grants access, so the
- * check is membership-and-role, not just "signed in". The org id comes from the
- * client, which is exactly why it is verified against the caller's membership
- * before anything is signed.
+ * Owners only, like web invites, and within the same limits the platform admin
+ * sets: the team-invite switch and the seat limit. The link can be opened by
+ * several people within its day, so the seat limit is checked again when each
+ * one joins — see `handleStart`.
  */
 export const createTelegramInvite = createServerFn({ method: "POST" })
 	.validator(z.object({ orgId: z.string().uuid() }))
 	.handler(async ({ data }) => {
-		const request = getRequest();
-		const session = await getAuth().api.getSession({
-			headers: request.headers,
-		});
+		await requireAccess(data.orgId, "manage");
 
-		if (!session) {
-			throw new Response("Not signed in.", { status: 401 });
+		const seats = await seatUsage(data.orgId);
+		if (!seats.teamInvitesEnabled) {
+			throw new Response(
+				"Team invites are turned off for this workspace. Contact your account manager.",
+				{ status: 403 },
+			);
 		}
-
-		const [membership] = await getDb()
-			.select({ role: orgMember.role })
-			.from(orgMember)
-			.where(
-				and(
-					eq(orgMember.orgId, data.orgId),
-					eq(orgMember.userId, session.user.id),
-				),
-			)
-			.limit(1);
-
-		if (!membership || membership.role === "member") {
-			throw new Response("Not allowed to invite for this workspace.", {
+		if (seats.limit !== null && seats.used >= seats.limit) {
+			throw new Response(`This workspace has used all ${seats.limit} seats.`, {
 				status: 403,
 			});
 		}

@@ -24,4 +24,14 @@ export const memberRole = pgEnum("member_role", [
 ]);
 
 /** Content is drafted in one of these; Amharic quality is tested per model. */
+/**
+ * Whether a workspace may be used at all. Set by the platform admin, never by
+ * the workspace's own people. Suspended keeps every row; it only closes the
+ * door — the web app, the bot and the weekly plan all check it.
+ */
+export const workspaceStatus = pgEnum("workspace_status", [
+	"active",
+	"suspended",
+]);
+
 export const contentLanguage = pgEnum("content_language", ["am", "en"]);

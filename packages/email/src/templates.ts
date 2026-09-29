@@ -62,3 +62,43 @@ export function passwordResetEmail(options: {
 		].join("\n"),
 	};
 }
+
+/** Workspace names are typed by people; keep them from becoming markup. */
+function escapeHtml(text: string): string {
+	return text
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;");
+}
+
+export function workspaceInviteEmail(options: {
+	to: string;
+	url: string;
+	workspaceName: string;
+	role: string;
+	expiresInDays: number;
+}): EmailMessage {
+	const { to, url, workspaceName, role, expiresInDays } = options;
+	const safeName = escapeHtml(workspaceName);
+
+	return {
+		to,
+		subject: `You're invited to ${workspaceName} on ${BRANDING.name}`,
+		html: layout(
+			`Join ${safeName}`,
+			`<p style="margin:0">You have been invited to the <b>${safeName}</b> workspace as ${role}. Sign up with this email address to review drafts and teach the Brand Brain your voice.</p>
+<p style="margin:16px 0 0">The link works once and is good for ${expiresInDays} days.</p>`,
+			{ href: url, label: "Accept the invite" },
+		),
+		text: [
+			`Join ${workspaceName}`,
+			"",
+			`You have been invited to the ${workspaceName} workspace as ${role}. Sign up with this email address to review drafts and teach the Brand Brain your voice.`,
+			"",
+			url,
+			"",
+			`The link works once and is good for ${expiresInDays} days.`,
+		].join("\n"),
+	};
+}

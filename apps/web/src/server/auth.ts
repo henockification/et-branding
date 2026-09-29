@@ -3,6 +3,7 @@
 import { env as workerEnv } from "cloudflare:workers";
 import { type Auth, createAuthFromEnv } from "@et/auth";
 import { resolveEmailSender } from "#/server/email";
+import { canSignUp } from "#/server/sign-up-policy";
 
 let cached: Auth | undefined;
 
@@ -16,6 +17,7 @@ let cached: Auth | undefined;
 export function getAuth(): Auth {
 	cached ??= createAuthFromEnv(process.env, {
 		email: resolveEmailSender(workerEnv),
+		canSignUp,
 	});
 	return cached;
 }

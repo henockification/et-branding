@@ -7,6 +7,7 @@ import {
 } from "@et/email";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError } from "better-auth/api";
 
 export type Auth = ReturnType<typeof createAuth>;
 export type Session = Auth["$Infer"]["Session"];
@@ -26,6 +27,14 @@ type AuthConfig = {
 	 * works locally before a sending domain exists.
 	 */
 	email?: EmailSender;
+	/**
+	 * Whether this address may create an account. Sign-up is open when absent.
+	 *
+	 * Checked in a database hook rather than on the sign-up form, because the
+	 * form is not the only way in: "Continue with Google" creates users too,
+	 * and a check that only guards one door guards nothing.
+	 */
+	canSignUp?: (email: string) => Promise<boolean>;
 };
 
 /** How long a password-reset link stays valid. */
@@ -83,6 +92,25 @@ export function createAuth(config: AuthConfig, db: Database = getDb()) {
 				trustedProviders: ["google"],
 			},
 		},
+		databaseHooks: config.canSignUp
+			? {
+					user: {
+						create: {
+							before: async (newUser) => {
+								const allowed = await config.canSignUp?.(
+									newUser.email.toLowerCase(),
+								);
+								if (!allowed) {
+									throw new APIError("FORBIDDEN", {
+										message:
+											"Accounts are by invitation. Open the invite link you were sent, and sign up with the address it was sent to.",
+									});
+								}
+							},
+						},
+					},
+				}
+			: undefined,
 		session: {
 			expiresIn: 60 * 60 * 24 * 30,
 			// Slide the expiry at most once a day so an active user stays signed in
@@ -105,7 +133,11 @@ export function createAuth(config: AuthConfig, db: Database = getDb()) {
  */
 export function createAuthFromEnv(
 	env: Record<string, string | undefined>,
-	options: { db?: Database; email?: EmailSender } = {},
+	options: {
+		db?: Database;
+		email?: EmailSender;
+		canSignUp?: (email: string) => Promise<boolean>;
+	} = {},
 ): Auth {
 	const secret = required(env, "BETTER_AUTH_SECRET");
 	const baseUrl = required(env, "BETTER_AUTH_URL").replace(/\/+$/, "");
@@ -123,6 +155,7 @@ export function createAuthFromEnv(
 				? { google: { clientId, clientSecret } }
 				: {}),
 			...(options.email ? { email: options.email } : {}),
+			...(options.canSignUp ? { canSignUp: options.canSignUp } : {}),
 		},
 		options.db,
 	);

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { z } from "zod";
+import { DraftActions } from "#/components/draft-actions";
 import {
 	type ContentOrigin,
 	type ContentStatus,
@@ -192,6 +193,15 @@ function ContentQueue() {
 							) : null}
 
 							<p className="type-body whitespace-pre-wrap">{item.body}</p>
+
+							{data.canEdit ? (
+								<DraftActions
+									orgId={orgId}
+									itemId={item.id}
+									body={item.body}
+									status={item.status}
+								/>
+							) : null}
 
 							{/* The learning pair: what the agent wrote, and what a human made of it. */}
 							{item.originalBody ? (

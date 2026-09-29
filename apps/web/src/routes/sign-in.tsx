@@ -57,7 +57,7 @@ function SignIn() {
 			subtitle="Sign in to pick up where your brand left off."
 			footer={
 				<>
-					New here? <Link to="/sign-up">Create an account</Link>.
+					New here? Open the invite link you were sent to create your account.
 				</>
 			}
 		>

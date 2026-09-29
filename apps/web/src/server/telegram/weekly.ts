@@ -265,8 +265,12 @@ async function deliver(input: {
 export async function organizationsToPlan(): Promise<
 	{ id: string; name: string }[]
 > {
-	return getDb()
-		.select({ id: organization.id, name: organization.name })
-		.from(organization)
-		.orderBy(sql`${organization.createdAt} asc`);
+	return (
+		getDb()
+			.select({ id: organization.id, name: organization.name })
+			.from(organization)
+			// A suspended workspace gets nothing — and costs nothing.
+			.where(eq(organization.status, "active"))
+			.orderBy(sql`${organization.createdAt} asc`)
+	);
 }

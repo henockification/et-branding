@@ -25,6 +25,7 @@ import {
 	truncateForTelegram,
 	verifyInviteToken,
 } from "@et/telegram";
+import { seatUsage } from "#/server/invite-core";
 import { capturePastPost, describeBrain } from "#/server/telegram/capture";
 import {
 	acknowledge,
@@ -50,7 +51,18 @@ type Member = {
 	orgName: string;
 	role: "owner" | "approver" | "member";
 	displayName: string;
+	status: "active" | "suspended";
+	suspendedReason: string | null;
 };
+
+/** What a suspended workspace's people are told, whatever they send. */
+function suspendedNotice(member: Member): string {
+	return [
+		`<b>${escapeHtml(member.orgName)}</b> is suspended at the moment, so I cannot work on it.`,
+		member.suspendedReason ? `\n${escapeHtml(member.suspendedReason)}` : "",
+		"\nYour drafts and brand brain are kept. Contact your account manager to reopen it.",
+	].join("");
+}
 
 async function findMember(telegramUserId: number): Promise<Member | null> {
 	const [row] = await getDb()
@@ -60,6 +72,8 @@ async function findMember(telegramUserId: number): Promise<Member | null> {
 			orgName: organization.name,
 			role: orgMember.role,
 			displayName: orgMember.displayName,
+			status: organization.status,
+			suspendedReason: organization.suspendedReason,
 		})
 		.from(orgMember)
 		.innerJoin(organization, eq(organization.id, orgMember.orgId))
@@ -151,6 +165,11 @@ async function handleMessage(input: {
 			chatId: input.chatId,
 			text: "This chat is not linked to a workspace yet. Ask your admin for an invite link and open it, or send /start with the invite code.",
 		});
+		return;
+	}
+
+	if (member.status !== "active") {
+		await tell(input.chatId, suspendedNotice(member));
 		return;
 	}
 
@@ -416,6 +435,11 @@ async function handlePhoto(
 		return;
 	}
 
+	if (member.status !== "active") {
+		await tell(chatId, suspendedNotice(member));
+		return;
+	}
+
 	const caption = message.caption?.trim() ?? "";
 
 	if (message.media_group_id && !caption) {
@@ -500,6 +524,11 @@ async function handleStart(input: {
 	const telegram = getTelegram();
 	const existing = await findMember(input.from.id);
 
+	if (existing && existing.status !== "active") {
+		await tell(input.chatId, suspendedNotice(existing));
+		return;
+	}
+
 	if (!input.argument) {
 		await telegram.sendMessage({
 			chatId: input.chatId,
@@ -545,6 +574,15 @@ async function handleStart(input: {
 			.set({ displayName, updatedAt: new Date() })
 			.where(eq(orgMember.id, existing.memberId));
 	} else {
+		// The invite link is reusable for a day, so the limits the platform
+		// admin set are checked for every person who opens it, not only when
+		// the link was made.
+		const refusal = await joinRefusal(result.orgId);
+		if (refusal) {
+			await tell(input.chatId, refusal);
+			return;
+		}
+
 		await db.insert(orgMember).values({
 			orgId: result.orgId,
 			telegramUserId: String(input.from.id),
@@ -564,6 +602,29 @@ async function handleStart(input: {
 		text: `Linked to <b>${escapeHtml(org?.name ?? "your workspace")}</b>. Tell me what to write, or tap a button below.`,
 		replyMarkup: MAIN_KEYBOARD,
 	});
+}
+
+/** Why a new person cannot join this workspace right now, or null if they can. */
+async function joinRefusal(orgId: string): Promise<string | null> {
+	const [org] = await getDb()
+		.select({ status: organization.status, name: organization.name })
+		.from(organization)
+		.where(eq(organization.id, orgId))
+		.limit(1);
+
+	if (!org) return "That workspace no longer exists.";
+	if (org.status !== "active") {
+		return `<b>${escapeHtml(org.name)}</b> is suspended at the moment, so nobody new can join.`;
+	}
+
+	const seats = await seatUsage(orgId);
+	if (!seats.teamInvitesEnabled) {
+		return "New team members cannot join this workspace right now. Ask its owner.";
+	}
+	if (seats.limit !== null && seats.used >= seats.limit) {
+		return `<b>${escapeHtml(org.name)}</b> has no free seats. Ask its owner to make room.`;
+	}
+	return null;
 }
 
 /**
@@ -591,6 +652,11 @@ async function handleCallback(query: {
 
 	if (!member) {
 		await acknowledge(query.id, "This chat is not linked to a workspace.");
+		return;
+	}
+
+	if (member.status !== "active") {
+		await acknowledge(query.id, `${member.orgName} is suspended.`);
 		return;
 	}
 

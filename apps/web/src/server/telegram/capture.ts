@@ -3,10 +3,10 @@ import { escapeHtml, type TelegramMessage } from "@et/telegram";
 import { getTelegram } from "#/server/telegram/client";
 
 /** Below this, a message is a remark rather than a post worth learning from. */
-const MIN_LENGTH = 40;
+export const MIN_LENGTH = 40;
 
 /** Telegram captions cap around 1024 characters; posts longer than this are rare. */
-const MAX_LENGTH = 8000;
+export const MAX_LENGTH = 8000;
 
 /**
  * How many past posts are worth keeping per brand.
@@ -16,7 +16,7 @@ const MAX_LENGTH = 8000;
  * for 50 posts on a model billing $0.047 per million, that is fractions of a
  * cent, and retrieval would be premature at this size.
  */
-const MAX_DOCUMENTS = 200;
+export const MAX_DOCUMENTS = 200;
 
 type CaptureInput = {
 	orgId: string;
