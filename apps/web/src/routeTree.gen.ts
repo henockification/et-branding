@@ -22,8 +22,14 @@ import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AuthedContentOrgIdRouteImport } from './routes/_authed/content.$orgId'
 import { Route as AuthedWorkspaceOrgIdRouteImport } from './routes/_authed/workspace.$orgId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiMarketingOpenrouterWebhookRouteImport } from './routes/api/marketing/openrouter-webhook'
+import { Route as ApiMarketingProductsRouteImport } from './routes/api/marketing/products'
 import { Route as ApiMediaItemIdRouteImport } from './routes/api/media/$itemId'
 import { Route as ApiTelegramWebhookRouteImport } from './routes/api/telegram/webhook'
+import { Route as AuthedMarketingOrgIdIndexRouteImport } from './routes/_authed/marketing.$orgId.index'
+import { Route as AuthedMarketingOrgIdProductIdRouteImport } from './routes/_authed/marketing.$orgId.$productId'
+import { Route as ApiMarketingOutputGenerationIdRouteImport } from './routes/api/marketing/output.$generationId'
+import { Route as ApiMarketingPhotoProductIdPhotoIdRouteImport } from './routes/api/marketing/photo.$productId.$photoId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -89,6 +95,17 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMarketingOpenrouterWebhookRoute =
+  ApiMarketingOpenrouterWebhookRouteImport.update({
+    id: '/api/marketing/openrouter-webhook',
+    path: '/api/marketing/openrouter-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMarketingProductsRoute = ApiMarketingProductsRouteImport.update({
+  id: '/api/marketing/products',
+  path: '/api/marketing/products',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMediaItemIdRoute = ApiMediaItemIdRouteImport.update({
   id: '/api/media/$itemId',
   path: '/api/media/$itemId',
@@ -99,6 +116,30 @@ const ApiTelegramWebhookRoute = ApiTelegramWebhookRouteImport.update({
   path: '/api/telegram/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedMarketingOrgIdIndexRoute =
+  AuthedMarketingOrgIdIndexRouteImport.update({
+    id: '/marketing/$orgId/',
+    path: '/marketing/$orgId/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedMarketingOrgIdProductIdRoute =
+  AuthedMarketingOrgIdProductIdRouteImport.update({
+    id: '/marketing/$orgId/$productId',
+    path: '/marketing/$orgId/$productId',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const ApiMarketingOutputGenerationIdRoute =
+  ApiMarketingOutputGenerationIdRouteImport.update({
+    id: '/api/marketing/output/$generationId',
+    path: '/api/marketing/output/$generationId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMarketingPhotoProductIdPhotoIdRoute =
+  ApiMarketingPhotoProductIdPhotoIdRouteImport.update({
+    id: '/api/marketing/photo/$productId/$photoId',
+    path: '/api/marketing/photo/$productId/$photoId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -113,8 +154,14 @@ export interface FileRoutesByFullPath {
   '/content/$orgId': typeof AuthedContentOrgIdRoute
   '/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/marketing/openrouter-webhook': typeof ApiMarketingOpenrouterWebhookRoute
+  '/api/marketing/products': typeof ApiMarketingProductsRoute
   '/api/media/$itemId': typeof ApiMediaItemIdRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
+  '/marketing/$orgId/$productId': typeof AuthedMarketingOrgIdProductIdRoute
+  '/api/marketing/output/$generationId': typeof ApiMarketingOutputGenerationIdRoute
+  '/marketing/$orgId/': typeof AuthedMarketingOrgIdIndexRoute
+  '/api/marketing/photo/$productId/$photoId': typeof ApiMarketingPhotoProductIdPhotoIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -129,8 +176,14 @@ export interface FileRoutesByTo {
   '/content/$orgId': typeof AuthedContentOrgIdRoute
   '/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/marketing/openrouter-webhook': typeof ApiMarketingOpenrouterWebhookRoute
+  '/api/marketing/products': typeof ApiMarketingProductsRoute
   '/api/media/$itemId': typeof ApiMediaItemIdRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
+  '/marketing/$orgId/$productId': typeof AuthedMarketingOrgIdProductIdRoute
+  '/api/marketing/output/$generationId': typeof ApiMarketingOutputGenerationIdRoute
+  '/marketing/$orgId': typeof AuthedMarketingOrgIdIndexRoute
+  '/api/marketing/photo/$productId/$photoId': typeof ApiMarketingPhotoProductIdPhotoIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -147,8 +200,14 @@ export interface FileRoutesById {
   '/_authed/content/$orgId': typeof AuthedContentOrgIdRoute
   '/_authed/workspace/$orgId': typeof AuthedWorkspaceOrgIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/marketing/openrouter-webhook': typeof ApiMarketingOpenrouterWebhookRoute
+  '/api/marketing/products': typeof ApiMarketingProductsRoute
   '/api/media/$itemId': typeof ApiMediaItemIdRoute
   '/api/telegram/webhook': typeof ApiTelegramWebhookRoute
+  '/_authed/marketing/$orgId/$productId': typeof AuthedMarketingOrgIdProductIdRoute
+  '/api/marketing/output/$generationId': typeof ApiMarketingOutputGenerationIdRoute
+  '/_authed/marketing/$orgId/': typeof AuthedMarketingOrgIdIndexRoute
+  '/api/marketing/photo/$productId/$photoId': typeof ApiMarketingPhotoProductIdPhotoIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -165,8 +224,14 @@ export interface FileRouteTypes {
     | '/content/$orgId'
     | '/workspace/$orgId'
     | '/api/auth/$'
+    | '/api/marketing/openrouter-webhook'
+    | '/api/marketing/products'
     | '/api/media/$itemId'
     | '/api/telegram/webhook'
+    | '/marketing/$orgId/$productId'
+    | '/api/marketing/output/$generationId'
+    | '/marketing/$orgId/'
+    | '/api/marketing/photo/$productId/$photoId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -181,8 +246,14 @@ export interface FileRouteTypes {
     | '/content/$orgId'
     | '/workspace/$orgId'
     | '/api/auth/$'
+    | '/api/marketing/openrouter-webhook'
+    | '/api/marketing/products'
     | '/api/media/$itemId'
     | '/api/telegram/webhook'
+    | '/marketing/$orgId/$productId'
+    | '/api/marketing/output/$generationId'
+    | '/marketing/$orgId'
+    | '/api/marketing/photo/$productId/$photoId'
   id:
     | '__root__'
     | '/'
@@ -198,8 +269,14 @@ export interface FileRouteTypes {
     | '/_authed/content/$orgId'
     | '/_authed/workspace/$orgId'
     | '/api/auth/$'
+    | '/api/marketing/openrouter-webhook'
+    | '/api/marketing/products'
     | '/api/media/$itemId'
     | '/api/telegram/webhook'
+    | '/_authed/marketing/$orgId/$productId'
+    | '/api/marketing/output/$generationId'
+    | '/_authed/marketing/$orgId/'
+    | '/api/marketing/photo/$productId/$photoId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -212,8 +289,12 @@ export interface RootRouteChildren {
   DevHealthRoute: typeof DevHealthRoute
   InviteTokenRoute: typeof InviteTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiMarketingOpenrouterWebhookRoute: typeof ApiMarketingOpenrouterWebhookRoute
+  ApiMarketingProductsRoute: typeof ApiMarketingProductsRoute
   ApiMediaItemIdRoute: typeof ApiMediaItemIdRoute
   ApiTelegramWebhookRoute: typeof ApiTelegramWebhookRoute
+  ApiMarketingOutputGenerationIdRoute: typeof ApiMarketingOutputGenerationIdRoute
+  ApiMarketingPhotoProductIdPhotoIdRoute: typeof ApiMarketingPhotoProductIdPhotoIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -309,6 +390,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/marketing/openrouter-webhook': {
+      id: '/api/marketing/openrouter-webhook'
+      path: '/api/marketing/openrouter-webhook'
+      fullPath: '/api/marketing/openrouter-webhook'
+      preLoaderRoute: typeof ApiMarketingOpenrouterWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/marketing/products': {
+      id: '/api/marketing/products'
+      path: '/api/marketing/products'
+      fullPath: '/api/marketing/products'
+      preLoaderRoute: typeof ApiMarketingProductsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/media/$itemId': {
       id: '/api/media/$itemId'
       path: '/api/media/$itemId'
@@ -323,6 +418,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTelegramWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/marketing/$orgId/': {
+      id: '/_authed/marketing/$orgId/'
+      path: '/marketing/$orgId'
+      fullPath: '/marketing/$orgId/'
+      preLoaderRoute: typeof AuthedMarketingOrgIdIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/marketing/$orgId/$productId': {
+      id: '/_authed/marketing/$orgId/$productId'
+      path: '/marketing/$orgId/$productId'
+      fullPath: '/marketing/$orgId/$productId'
+      preLoaderRoute: typeof AuthedMarketingOrgIdProductIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/api/marketing/output/$generationId': {
+      id: '/api/marketing/output/$generationId'
+      path: '/api/marketing/output/$generationId'
+      fullPath: '/api/marketing/output/$generationId'
+      preLoaderRoute: typeof ApiMarketingOutputGenerationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/marketing/photo/$productId/$photoId': {
+      id: '/api/marketing/photo/$productId/$photoId'
+      path: '/api/marketing/photo/$productId/$photoId'
+      fullPath: '/api/marketing/photo/$productId/$photoId'
+      preLoaderRoute: typeof ApiMarketingPhotoProductIdPhotoIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -331,6 +454,8 @@ interface AuthedRouteChildren {
   AuthedDashboardRoute: typeof AuthedDashboardRoute
   AuthedContentOrgIdRoute: typeof AuthedContentOrgIdRoute
   AuthedWorkspaceOrgIdRoute: typeof AuthedWorkspaceOrgIdRoute
+  AuthedMarketingOrgIdProductIdRoute: typeof AuthedMarketingOrgIdProductIdRoute
+  AuthedMarketingOrgIdIndexRoute: typeof AuthedMarketingOrgIdIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
@@ -338,6 +463,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedDashboardRoute: AuthedDashboardRoute,
   AuthedContentOrgIdRoute: AuthedContentOrgIdRoute,
   AuthedWorkspaceOrgIdRoute: AuthedWorkspaceOrgIdRoute,
+  AuthedMarketingOrgIdProductIdRoute: AuthedMarketingOrgIdProductIdRoute,
+  AuthedMarketingOrgIdIndexRoute: AuthedMarketingOrgIdIndexRoute,
 }
 
 const AuthedRouteWithChildren =
@@ -353,8 +480,13 @@ const rootRouteChildren: RootRouteChildren = {
   DevHealthRoute: DevHealthRoute,
   InviteTokenRoute: InviteTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiMarketingOpenrouterWebhookRoute: ApiMarketingOpenrouterWebhookRoute,
+  ApiMarketingProductsRoute: ApiMarketingProductsRoute,
   ApiMediaItemIdRoute: ApiMediaItemIdRoute,
   ApiTelegramWebhookRoute: ApiTelegramWebhookRoute,
+  ApiMarketingOutputGenerationIdRoute: ApiMarketingOutputGenerationIdRoute,
+  ApiMarketingPhotoProductIdPhotoIdRoute:
+    ApiMarketingPhotoProductIdPhotoIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

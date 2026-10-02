@@ -1,0 +1,1 @@
+ALTER TABLE "marketing_generations" ADD COLUMN "voiceover_key" text;

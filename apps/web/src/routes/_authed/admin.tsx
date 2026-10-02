@@ -1,3 +1,4 @@
+import { MODULE_KEYS, MODULES, type ModuleKey } from "@et/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
@@ -7,12 +8,14 @@ import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { Switch } from "#/components/ui/switch";
 import {
+	adjustModuleCredits,
 	adminWithdrawInvite,
 	createWorkspace,
 	fetchAdminConsole,
 	inviteOwner,
 	setWorkspaceStatus,
 	updateBilling,
+	updateModule,
 	updateTeamLimits,
 } from "#/server/admin";
 
@@ -37,6 +40,7 @@ type Console = Awaited<ReturnType<typeof fetchAdminConsole>> & {
 	allowed: true;
 };
 type Workspace = Console["workspaces"][number];
+type WorkspaceModule = Workspace["modules"][number];
 
 const QUERY_KEY = ["admin-console"];
 
@@ -59,7 +63,10 @@ function AdminConsole() {
 	const { workspaces } = consoleQuery.data;
 	const active = workspaces.filter((w) => w.status === "active");
 	const overdue = workspaces.filter((w) => w.overdue);
-	const spend = workspaces.reduce((sum, w) => sum + w.modelUsdThisMonth, 0);
+	const spend = workspaces.reduce(
+		(sum, w) => sum + w.modelUsdThisMonth + w.promoUsdThisMonth,
+		0,
+	);
 
 	// Revenue by currency: mixing ETB and USD into one number would be a lie.
 	const revenue = new Map<string, number>();
@@ -110,18 +117,20 @@ function NewWorkspace() {
 	const [name, setName] = useState("");
 	const [ownerEmail, setOwnerEmail] = useState("");
 	const [seats, setSeats] = useState("5");
+	const [modules, setModules] = useState<ModuleKey[]>(["content"]);
 
 	const create = useMutation({
 		mutationFn: () =>
 			createWorkspace({
 				data:
 					kind === "own"
-						? { kind, name: name.trim() }
+						? { kind, name: name.trim(), modules }
 						: {
 								kind,
 								name: name.trim(),
 								ownerEmail: ownerEmail.trim(),
 								seatLimit: seats.trim() ? Number(seats) : null,
+								modules,
 							},
 			}),
 		onSuccess: () => {
@@ -210,10 +219,32 @@ function NewWorkspace() {
 						</div>
 					</>
 				) : null}
+				<fieldset className="space-y-2">
+					<legend className="type-label">Modules</legend>
+					<div className="flex flex-wrap gap-brand-4">
+						{MODULE_KEYS.map((key) => (
+							<label key={key} className="flex items-center gap-2 type-caption">
+								<input
+									type="checkbox"
+									checked={modules.includes(key)}
+									onChange={(event) =>
+										setModules((current) =>
+											event.target.checked
+												? [...current, key]
+												: current.filter((m) => m !== key),
+										)
+									}
+								/>
+								{MODULES[key].label}
+							</label>
+						))}
+					</div>
+				</fieldset>
 				<Button
 					type="submit"
 					disabled={
 						create.isPending ||
+						modules.length === 0 ||
 						!name.trim() ||
 						(kind === "client" && !ownerEmail.trim())
 					}
@@ -333,7 +364,37 @@ function WorkspaceCard({ workspace }: { workspace: Workspace }) {
 				<Stat label="Model cost this month">
 					${workspace.modelUsdThisMonth.toFixed(4)}
 				</Stat>
+				<Stat label="Promos this month">{workspace.promosThisMonth}</Stat>
+				<Stat label="Promo credits this month">
+					{workspace.promoCreditsThisMonth}
+				</Stat>
+				<Stat label="Promo media cost">
+					${workspace.promoUsdThisMonth.toFixed(4)}
+				</Stat>
 			</dl>
+
+			<details>
+				<summary className="type-caption cursor-pointer">
+					Modules ·{" "}
+					{workspace.modules
+						.filter((m) => m.enabled)
+						.map(
+							(m) =>
+								`${MODULES[m.module].label}${MODULES[m.module].metered ? ` (${m.creditsUsed}/${m.monthlyCredits} credits)` : ""}`,
+						)
+						.join(", ") || "none"}
+				</summary>
+				<div className="mt-brand-4 space-y-brand-6">
+					{workspace.modules.map((m) => (
+						<ModuleForm
+							key={m.module}
+							orgId={workspace.id}
+							value={m}
+							onSaved={refresh}
+						/>
+					))}
+				</div>
+			</details>
 
 			<details>
 				<summary className="type-caption cursor-pointer">
@@ -455,6 +516,181 @@ function BillingForm({
 					</span>
 				) : null}
 			</div>
+		</form>
+	);
+}
+
+function ModuleForm({
+	orgId,
+	value,
+	onSaved,
+}: {
+	orgId: string;
+	value: WorkspaceModule;
+	onSaved: () => void;
+}) {
+	const spec = MODULES[value.module];
+	const id = `${value.module}-${orgId}`;
+	const [enabled, setEnabled] = useState(
+		value.subscribed ? value.enabled : true,
+	);
+	const [paidUntil, setPaidUntil] = useState(value.paidUntil ?? "");
+	const [credits, setCredits] = useState(String(value.monthlyCredits));
+	const [price, setPrice] = useState(value.priceMonthly ?? "");
+	const [currency, setCurrency] = useState(value.currency);
+	const [note, setNote] = useState(value.note ?? "");
+	const [topUp, setTopUp] = useState("");
+
+	const save = useMutation({
+		mutationFn: () =>
+			updateModule({
+				data: {
+					orgId,
+					module: value.module,
+					enabled,
+					paidUntil: paidUntil || null,
+					monthlyCredits: Number(credits) || 0,
+					priceMonthly: String(price).trim() ? Number(price) : null,
+					currency: currency.trim() || "ETB",
+					note: note.trim() || null,
+				},
+			}),
+		onSuccess: onSaved,
+	});
+
+	const adjust = useMutation({
+		mutationFn: () =>
+			adjustModuleCredits({
+				data: { orgId, module: value.module, delta: Number(topUp) },
+			}),
+		onSuccess: () => {
+			setTopUp("");
+			onSaved();
+		},
+	});
+
+	return (
+		<form
+			className="grid gap-brand-4 rounded-md border p-brand-4 sm:grid-cols-2"
+			onSubmit={(event) => {
+				event.preventDefault();
+				save.mutate();
+			}}
+		>
+			<div className="flex items-center justify-between gap-2 sm:col-span-2">
+				<h3 className="type-label">
+					{spec.label}
+					{value.subscribed ? "" : " · not subscribed"}
+				</h3>
+				<label
+					htmlFor={`on-${id}`}
+					className="flex items-center gap-2 type-caption"
+				>
+					<Switch
+						id={`on-${id}`}
+						checked={enabled}
+						onCheckedChange={setEnabled}
+					/>
+					{enabled ? "On" : "Off"}
+				</label>
+			</div>
+			<Field id={`paid-${id}`} label="Paid until">
+				<Input
+					id={`paid-${id}`}
+					type="date"
+					value={paidUntil}
+					onChange={(event) => setPaidUntil(event.target.value)}
+				/>
+			</Field>
+			<div className="flex gap-2">
+				<Field id={`price-${id}`} label="Price per month">
+					<Input
+						id={`price-${id}`}
+						type="number"
+						min={0}
+						step="0.01"
+						value={price}
+						onChange={(event) => setPrice(event.target.value)}
+					/>
+				</Field>
+				<Field id={`currency-${id}`} label="Currency">
+					<Input
+						id={`currency-${id}`}
+						className="w-20"
+						maxLength={3}
+						value={currency}
+						onChange={(event) => setCurrency(event.target.value)}
+					/>
+				</Field>
+			</div>
+			{spec.metered ? (
+				<Field id={`credits-${id}`} label="Credits per month">
+					<Input
+						id={`credits-${id}`}
+						type="number"
+						min={0}
+						value={credits}
+						onChange={(event) => setCredits(event.target.value)}
+					/>
+				</Field>
+			) : null}
+			<Field id={`note-${id}`} label="Note">
+				<Input
+					id={`note-${id}`}
+					value={note}
+					onChange={(event) => setNote(event.target.value)}
+				/>
+			</Field>
+			<div className="flex flex-wrap items-center gap-brand-4 sm:col-span-2">
+				<Button type="submit" size="sm" disabled={save.isPending}>
+					{save.isPending
+						? "Saving…"
+						: value.subscribed
+							? "Save"
+							: `Add ${spec.label}`}
+				</Button>
+				{save.isSuccess ? (
+					<span className="type-caption text-primary">Saved.</span>
+				) : null}
+				{save.isError ? (
+					<span className="type-caption text-destructive">
+						{save.error.message}
+					</span>
+				) : null}
+			</div>
+			{spec.metered && value.subscribed ? (
+				<div className="flex flex-wrap items-end gap-2 sm:col-span-2">
+					<Field
+						id={`topup-${id}`}
+						label="Top up this month (negative to remove)"
+					>
+						<Input
+							id={`topup-${id}`}
+							type="number"
+							className="w-32"
+							value={topUp}
+							onChange={(event) => setTopUp(event.target.value)}
+						/>
+					</Field>
+					<Button
+						type="button"
+						size="sm"
+						variant="outline"
+						disabled={adjust.isPending || !Number(topUp)}
+						onClick={() => adjust.mutate()}
+					>
+						Apply
+					</Button>
+					<span className="type-caption text-muted-foreground">
+						{value.creditsUsed} of {value.monthlyCredits} used this month
+					</span>
+					{adjust.isError ? (
+						<span className="type-caption text-destructive">
+							{adjust.error.message}
+						</span>
+					) : null}
+				</div>
+			) : null}
 		</form>
 	);
 }

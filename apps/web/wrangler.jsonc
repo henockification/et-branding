@@ -9,7 +9,8 @@
   // triggers are delivered to `scheduled`. See src/worker.ts.
   "main": "src/worker.ts",
   // Monday 06:00 UTC is 09:00 in Addis — the plan lands before the week starts.
-  "triggers": { "crons": ["0 6 * * 1"] },
+  // Every 5 minutes: finish Marketing Studio promos whose webhook never came.
+  "triggers": { "crons": ["0 6 * * 1", "*/5 * * * *"] },
   "observability": {
     "enabled": true
   },

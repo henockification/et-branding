@@ -171,3 +171,107 @@ export async function photoResponse(key: string): Promise<Response | null> {
 		},
 	});
 }
+
+/** Where Marketing Studio keeps product photos and finished promos. */
+export const marketingKeys = {
+	productPhoto: (orgId: string, productId: string, photoId: string) =>
+		`orgs/${orgId}/marketing/products/${productId}/${photoId}.jpg`,
+	output: (orgId: string, generationId: string, extension: string) =>
+		`orgs/${orgId}/marketing/generations/${generationId}/output.${extension}`,
+	voiceover: (orgId: string, generationId: string) =>
+		`orgs/${orgId}/marketing/generations/${generationId}/voiceover.mp3`,
+};
+
+/**
+ * Stores a provider's download in R2 without holding it all in memory when
+ * its length is known — a promo video can run to tens of megabytes. R2 needs
+ * the length up front to stream, so an unsized body is buffered instead.
+ */
+export async function putMedia(
+	key: string,
+	source: Response | Uint8Array<ArrayBuffer>,
+	contentType: string,
+): Promise<void> {
+	if (source instanceof Uint8Array) {
+		await env.MEDIA.put(key, source, { httpMetadata: { contentType } });
+		return;
+	}
+
+	const length = Number(source.headers.get("content-length"));
+	const httpMetadata = { contentType };
+
+	if (source.body && Number.isSafeInteger(length) && length > 0) {
+		const { readable, writable } = new FixedLengthStream(length);
+		const piped = source.body.pipeTo(writable);
+		await env.MEDIA.put(key, readable, { httpMetadata });
+		await piped;
+		return;
+	}
+
+	await env.MEDIA.put(key, await source.arrayBuffer(), { httpMetadata });
+}
+
+/** Removes stored objects, e.g. a deleted product's photos and promos. */
+export async function deleteMedia(keys: string[]): Promise<void> {
+	if (keys.length > 0) await env.MEDIA.delete(keys);
+}
+
+/**
+ * A stored image or video as an HTTP response, honouring `Range`.
+ *
+ * Range is what makes video work: Safari will not play an mp4 from a server
+ * that answers a byte-range request with the whole file, and every browser
+ * needs it to seek.
+ */
+export async function mediaResponse(
+	key: string,
+	request: Request,
+	options: { download?: string } = {},
+): Promise<Response | null> {
+	const rangeHeader = request.headers.get("range");
+	const range = rangeHeader ? parseRange(rangeHeader) : undefined;
+
+	const object = await env.MEDIA.get(key, range ? { range } : {});
+	if (!object) return null;
+
+	const headers = new Headers({
+		"content-type":
+			object.httpMetadata?.contentType ?? "application/octet-stream",
+		"cache-control": "private, max-age=3600",
+		"accept-ranges": "bytes",
+		etag: object.httpEtag,
+	});
+	if (options.download) {
+		headers.set(
+			"content-disposition",
+			`attachment; filename="${options.download.replace(/[^\w.-]+/g, "-")}"`,
+		);
+	}
+
+	if (range && "range" in object && object.range) {
+		const { offset = 0, length = object.size - offset } = object.range as {
+			offset?: number;
+			length?: number;
+		};
+		headers.set(
+			"content-range",
+			`bytes ${offset}-${offset + length - 1}/${object.size}`,
+		);
+		headers.set("content-length", String(length));
+		return new Response(object.body, { status: 206, headers });
+	}
+
+	headers.set("content-length", String(object.size));
+	return new Response(object.body, { headers });
+}
+
+/** `bytes=start-end`, `bytes=start-` or `bytes=-suffix`; anything else is ignored. */
+function parseRange(header: string): R2Range | undefined {
+	const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+	if (!match) return undefined;
+	const [, start, end] = match;
+	if (start === "" && end === "") return undefined;
+	if (start === "") return { suffix: Number(end) };
+	if (end === "") return { offset: Number(start) };
+	return { offset: Number(start), length: Number(end) - Number(start) + 1 };
+}

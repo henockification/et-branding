@@ -50,6 +50,20 @@
       "when": 1790661847096,
       "tag": "0006_workspace_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790941459478,
+      "tag": "0007_modules_marketing",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790944239131,
+      "tag": "0008_marketing_voiceover",
+      "breakpoints": true
     }
   ]
 }

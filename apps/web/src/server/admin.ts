@@ -1,3 +1,4 @@
+import { MODULE_KEYS, type ModuleKey } from "@et/core";
 import {
 	agentRun,
 	and,
@@ -10,9 +11,11 @@ import {
 	gte,
 	inArray,
 	isNull,
+	marketingGeneration,
 	organization,
 	orgInvite,
 	orgMember,
+	orgModule,
 	sql,
 	user,
 } from "@et/db";
@@ -21,6 +24,7 @@ import { z } from "zod";
 import { getViewer, requireAdmin } from "#/server/access";
 import { fail } from "#/server/errors";
 import { issueInvite, withdrawInvite } from "#/server/invite-core";
+import { adjustCredits, currentPeriod } from "#/server/modules";
 
 /**
  * The platform admin's console: every workspace as an account.
@@ -81,65 +85,87 @@ export const fetchAdminConsole = createServerFn({ method: "GET" }).handler(
 			};
 		}
 
-		const [members, invites, drafts, spend] = await Promise.all([
-			db
-				.select({
-					id: orgMember.id,
-					orgId: orgMember.orgId,
-					displayName: orgMember.displayName,
-					role: orgMember.role,
-					email: user.email,
-					userId: orgMember.userId,
-					onTelegram: sql<boolean>`${orgMember.telegramUserId} is not null`,
-				})
-				.from(orgMember)
-				.leftJoin(user, eq(user.id, orgMember.userId))
-				.where(inArray(orgMember.orgId, ids)),
+		const [members, invites, drafts, spend, modules, promoSpend] =
+			await Promise.all([
+				db
+					.select({
+						id: orgMember.id,
+						orgId: orgMember.orgId,
+						displayName: orgMember.displayName,
+						role: orgMember.role,
+						email: user.email,
+						userId: orgMember.userId,
+						onTelegram: sql<boolean>`${orgMember.telegramUserId} is not null`,
+					})
+					.from(orgMember)
+					.leftJoin(user, eq(user.id, orgMember.userId))
+					.where(inArray(orgMember.orgId, ids)),
 
-			db
-				.select({
-					id: orgInvite.id,
-					orgId: orgInvite.orgId,
-					email: orgInvite.email,
-					role: orgInvite.role,
-					expiresAt: orgInvite.expiresAt,
-				})
-				.from(orgInvite)
-				.where(
-					and(
-						inArray(orgInvite.orgId, ids),
-						isNull(orgInvite.acceptedAt),
-						isNull(orgInvite.revokedAt),
-						gt(orgInvite.expiresAt, new Date()),
+				db
+					.select({
+						id: orgInvite.id,
+						orgId: orgInvite.orgId,
+						email: orgInvite.email,
+						role: orgInvite.role,
+						expiresAt: orgInvite.expiresAt,
+					})
+					.from(orgInvite)
+					.where(
+						and(
+							inArray(orgInvite.orgId, ids),
+							isNull(orgInvite.acceptedAt),
+							isNull(orgInvite.revokedAt),
+							gt(orgInvite.expiresAt, new Date()),
+						),
 					),
-				),
 
-			// Counts only — how much the workspace is used, never what it says.
-			db
-				.select({
-					orgId: contentItem.orgId,
-					count: sql<number>`count(*)::int`,
-				})
-				.from(contentItem)
-				.where(
-					and(
-						inArray(contentItem.orgId, ids),
-						gte(contentItem.createdAt, since),
-					),
-				)
-				.groupBy(contentItem.orgId),
+				// Counts only — how much the workspace is used, never what it says.
+				db
+					.select({
+						orgId: contentItem.orgId,
+						count: sql<number>`count(*)::int`,
+					})
+					.from(contentItem)
+					.where(
+						and(
+							inArray(contentItem.orgId, ids),
+							gte(contentItem.createdAt, since),
+						),
+					)
+					.groupBy(contentItem.orgId),
 
-			db
-				.select({
-					orgId: agentRun.orgId,
-					usd: sql<string>`coalesce(sum(${agentRun.usd}), 0)::text`,
-				})
-				.from(agentRun)
-				.where(
-					and(inArray(agentRun.orgId, ids), gte(agentRun.createdAt, since)),
-				)
-				.groupBy(agentRun.orgId),
-		]);
+				db
+					.select({
+						orgId: agentRun.orgId,
+						usd: sql<string>`coalesce(sum(${agentRun.usd}), 0)::text`,
+					})
+					.from(agentRun)
+					.where(
+						and(inArray(agentRun.orgId, ids), gte(agentRun.createdAt, since)),
+					)
+					.groupBy(agentRun.orgId),
+
+				db.select().from(orgModule).where(inArray(orgModule.orgId, ids)),
+
+				// Promos made this month, the credits they used and what OpenRouter
+				// charged for them (admin only — clients see credits).
+				db
+					.select({
+						orgId: marketingGeneration.orgId,
+						count: sql<number>`count(*) filter (where ${marketingGeneration.status} = 'completed')::int`,
+						credits: sql<number>`coalesce(sum(${marketingGeneration.credits}) filter (where ${marketingGeneration.status} <> 'failed'), 0)::int`,
+						usd: sql<string>`coalesce(sum(${marketingGeneration.providerCost}), 0)::text`,
+					})
+					.from(marketingGeneration)
+					.where(
+						and(
+							inArray(marketingGeneration.orgId, ids),
+							gte(marketingGeneration.createdAt, since),
+						),
+					)
+					.groupBy(marketingGeneration.orgId),
+			]);
+		const period = currentPeriod();
 
 		const today = new Date().toISOString().slice(0, 10);
 
@@ -162,6 +188,30 @@ export const fetchAdminConsole = createServerFn({ method: "GET" }).handler(
 					modelUsdThisMonth: Number(
 						spend.find((s) => s.orgId === workspace.id)?.usd ?? 0,
 					),
+					modules: MODULE_KEYS.map((key) => {
+						const row = modules.find(
+							(m) => m.orgId === workspace.id && m.module === key,
+						);
+						return {
+							module: key,
+							subscribed: Boolean(row),
+							enabled: row?.enabled ?? false,
+							paidUntil: row?.paidUntil ?? null,
+							monthlyCredits: row?.monthlyCredits ?? 0,
+							creditsUsed:
+								row && row.creditPeriod === period ? row.creditsUsed : 0,
+							priceMonthly: row?.priceMonthly ?? null,
+							currency: row?.currency ?? workspace.currency,
+							note: row?.note ?? null,
+						};
+					}),
+					promosThisMonth:
+						promoSpend.find((p) => p.orgId === workspace.id)?.count ?? 0,
+					promoCreditsThisMonth:
+						promoSpend.find((p) => p.orgId === workspace.id)?.credits ?? 0,
+					promoUsdThisMonth: Number(
+						promoSpend.find((p) => p.orgId === workspace.id)?.usd ?? 0,
+					),
 					overdue: Boolean(
 						workspace.status === "active" &&
 							workspace.paidUntil &&
@@ -172,6 +222,15 @@ export const fetchAdminConsole = createServerFn({ method: "GET" }).handler(
 		};
 	},
 );
+
+const moduleKeySchema = z.enum(MODULE_KEYS as [ModuleKey, ...ModuleKey[]]);
+
+/** Which products a new workspace starts with. Content, unless told otherwise. */
+const modulesSchema = z
+	.array(moduleKeySchema)
+	.min(1)
+	.default(["content"])
+	.transform((keys) => [...new Set(keys)]);
 
 /** Lowercase, dash-separated, with a short suffix so two "Bunna"s can coexist. */
 function slugify(name: string): string {
@@ -198,12 +257,14 @@ export const createWorkspace = createServerFn({ method: "POST" })
 			z.object({
 				kind: z.literal("own"),
 				name: z.string().trim().min(1).max(80),
+				modules: modulesSchema,
 			}),
 			z.object({
 				kind: z.literal("client"),
 				name: z.string().trim().min(1).max(80),
 				ownerEmail: z.string().trim().toLowerCase().email().max(254),
 				seatLimit: z.number().int().min(1).max(500).nullable(),
+				modules: modulesSchema,
 			}),
 		]),
 	)
@@ -227,6 +288,10 @@ export const createWorkspace = createServerFn({ method: "POST" })
 		await db
 			.insert(brandProfile)
 			.values({ orgId: created.id, name: data.name });
+
+		await db
+			.insert(orgModule)
+			.values(data.modules.map((module) => ({ orgId: created.id, module })));
 
 		if (data.kind === "own") {
 			await db.insert(orgMember).values({
@@ -370,4 +435,74 @@ export const adminWithdrawInvite = createServerFn({ method: "POST" })
 		await requireAdmin();
 		await withdrawInvite(data.orgId, data.inviteId);
 		return { revoked: true };
+	});
+
+/**
+ * Subscribes a workspace to a module, or changes its terms. Payment is
+ * off-app, like the workspace's own billing record: this is where the admin
+ * writes down what was agreed.
+ */
+export const updateModule = createServerFn({ method: "POST" })
+	.validator(
+		orgIdSchema.extend({
+			module: moduleKeySchema,
+			enabled: z.boolean(),
+			paidUntil: z
+				.string()
+				.regex(/^\d{4}-\d{2}-\d{2}$/)
+				.nullable(),
+			monthlyCredits: z.number().int().min(0).max(100_000),
+			priceMonthly: z.number().min(0).max(10_000_000).nullable(),
+			currency: z.string().trim().toUpperCase().length(3),
+			note: z.string().trim().max(500).nullable(),
+		}),
+	)
+	.handler(async ({ data }) => {
+		await requireAdmin();
+
+		const terms = {
+			enabled: data.enabled,
+			paidUntil: data.paidUntil,
+			monthlyCredits: data.monthlyCredits,
+			priceMonthly:
+				data.priceMonthly === null ? null : data.priceMonthly.toFixed(2),
+			currency: data.currency,
+			note: data.note || null,
+		};
+
+		await getDb()
+			.insert(orgModule)
+			.values({ orgId: data.orgId, module: data.module, ...terms })
+			.onConflictDoUpdate({
+				target: [orgModule.orgId, orgModule.module],
+				set: { ...terms, updatedAt: new Date() },
+			});
+
+		return { saved: true };
+	});
+
+/** A one-off top-up (or claw-back) of this month's credits. */
+export const adjustModuleCredits = createServerFn({ method: "POST" })
+	.validator(
+		orgIdSchema.extend({
+			module: moduleKeySchema,
+			delta: z
+				.number()
+				.int()
+				.min(-100_000)
+				.max(100_000)
+				.refine((n) => n !== 0, "Enter a number other than zero."),
+			note: z.string().trim().max(300).optional(),
+		}),
+	)
+	.handler(async ({ data }) => {
+		const admin = await requireAdmin();
+		await adjustCredits({
+			orgId: data.orgId,
+			module: data.module,
+			delta: data.delta,
+			userId: admin.userId,
+			note: data.note,
+		});
+		return { saved: true };
 	});

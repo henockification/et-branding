@@ -2,8 +2,13 @@ import {
 	createStartHandler,
 	defaultStreamHandler,
 } from "@tanstack/react-start/server";
+import { pollStaleGenerations } from "#/server/marketing/pipeline";
 import { runWithExecutionContext } from "#/server/request-context";
 import { runScheduledPlans } from "#/server/scheduled";
+
+/** Must match `triggers.crons` in wrangler.jsonc. */
+const WEEKLY_PLAN_CRON = "0 6 * * 1";
+const PROMO_POLL_CRON = "*/5 * * * *";
 
 /**
  * The Worker entry.
@@ -33,14 +38,22 @@ export default {
 		);
 	},
 	/**
-	 * Cron. `waitUntil` keeps the isolate alive for the whole run: planning
-	 * several organizations takes longer than a request would normally live.
+	 * Cron, dispatched on which trigger fired. `waitUntil` keeps the isolate
+	 * alive for the whole run: planning several organizations, or copying
+	 * finished videos into R2, takes longer than a request would normally live.
 	 */
 	async scheduled(
 		controller: { cron: string; scheduledTime: number },
 		_env: unknown,
 		ctx: { waitUntil(promise: Promise<unknown>): void },
 	): Promise<void> {
-		ctx.waitUntil(runScheduledPlans(new Date(controller.scheduledTime)));
+		const at = new Date(controller.scheduledTime);
+		if (controller.cron === WEEKLY_PLAN_CRON) {
+			ctx.waitUntil(runScheduledPlans(at));
+		} else if (controller.cron === PROMO_POLL_CRON) {
+			ctx.waitUntil(pollStaleGenerations(at));
+		} else {
+			console.warn(`scheduled: no job for cron "${controller.cron}"`);
+		}
 	},
 };

@@ -32,6 +32,9 @@ importers:
       '@et/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@et/elevenlabs':
+        specifier: workspace:*
+        version: link:../../packages/elevenlabs
       '@et/email':
         specifier: workspace:*
         version: link:../../packages/email
@@ -214,6 +217,15 @@ importers:
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.3
+
+  packages/elevenlabs:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.4
       typescript:
         specifier: ^6.0.2
         version: 6.0.3

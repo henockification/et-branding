@@ -27,3 +27,21 @@ export {
 	isLanguageEnabled,
 	LANGUAGES,
 } from "./languages.ts";
+export type {
+	ModuleKey,
+	ModuleSpec,
+	PromoAspectRatio,
+	PromoDuration,
+	PromoKind,
+} from "./modules.ts";
+export {
+	isModuleKey,
+	MODULE_KEYS,
+	MODULES,
+	PROMO_ASPECT_RATIOS,
+	PROMO_DURATIONS,
+	PROMO_KIND_LABELS,
+	PROMO_KINDS,
+	promoCreditCost,
+	VIDEO_ASPECT_RATIOS,
+} from "./modules.ts";

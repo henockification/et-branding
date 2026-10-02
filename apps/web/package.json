@@ -23,6 +23,7 @@
     "@et/auth": "workspace:*",
     "@et/core": "workspace:*",
     "@et/db": "workspace:*",
+    "@et/elevenlabs": "workspace:*",
     "@et/email": "workspace:*",
     "@et/telegram": "workspace:*",
     "@t3-oss/env-core": "^0.13.10",

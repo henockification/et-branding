@@ -12,6 +12,7 @@ import {
 	isNotNull,
 	organization,
 	orgMember,
+	orgModule,
 	sql,
 } from "@et/db";
 import { escapeHtml, truncateForTelegram } from "@et/telegram";
@@ -266,8 +267,22 @@ export async function organizationsToPlan(): Promise<
 		getDb()
 			.select({ id: organization.id, name: organization.name })
 			.from(organization)
-			// A suspended workspace gets nothing — and costs nothing.
-			.where(eq(organization.status, "active"))
+			.innerJoin(
+				orgModule,
+				and(
+					eq(orgModule.orgId, organization.id),
+					eq(orgModule.module, "content"),
+				),
+			)
+			// A suspended workspace, or one without Content Studio, gets
+			// nothing — and costs nothing.
+			.where(
+				and(
+					eq(organization.status, "active"),
+					eq(orgModule.enabled, true),
+					sql`(${orgModule.paidUntil} is null or ${orgModule.paidUntil} >= current_date)`,
+				),
+			)
 			.orderBy(sql`${organization.createdAt} asc`)
 	);
 }

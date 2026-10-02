@@ -1,6 +1,7 @@
 import { brandProfile, desc, eq, getDb, organization, orgMember } from "@et/db";
 import { createServerFn } from "@tanstack/react-start";
 import { requireViewer } from "#/server/access";
+import { moduleStates } from "#/server/modules";
 
 /**
  * Workspaces the caller belongs to, with the brand each one is building.
@@ -32,6 +33,15 @@ export const listOrganizations = createServerFn({ method: "GET" }).handler(
 			.where(eq(orgMember.userId, viewer.userId))
 			.orderBy(desc(organization.createdAt));
 
-		return { isAdmin: viewer.isAdmin, organizations };
+		// The shop window: which products each workspace has, and which it
+		// could have. A handful of workspaces per person, so one query each.
+		const withModules = await Promise.all(
+			organizations.map(async (org) => ({
+				...org,
+				modules: await moduleStates(org.id),
+			})),
+		);
+
+		return { isAdmin: viewer.isAdmin, organizations: withModules };
 	},
 );

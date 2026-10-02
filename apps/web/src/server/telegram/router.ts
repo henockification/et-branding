@@ -1,3 +1,4 @@
+import { MODULES } from "@et/core";
 import {
 	and,
 	brandProfile,
@@ -6,6 +7,8 @@ import {
 	getDb,
 	organization,
 	orgMember,
+	orgModule,
+	sql,
 	telegramUpdate,
 } from "@et/db";
 import {
@@ -53,6 +56,8 @@ type Member = {
 	displayName: string;
 	status: "active" | "suspended";
 	suspendedReason: string | null;
+	/** Content Studio is switched on and paid up for the workspace. */
+	contentOpen: boolean;
 };
 
 /** What a suspended workspace's people are told, whatever they send. */
@@ -61,6 +66,14 @@ function suspendedNotice(member: Member): string {
 		`<b>${escapeHtml(member.orgName)}</b> is suspended at the moment, so I cannot work on it.`,
 		member.suspendedReason ? `\n${escapeHtml(member.suspendedReason)}` : "",
 		"\nYour drafts and brand brain are kept. Contact your account manager to reopen it.",
+	].join("");
+}
+
+/** What people are told when the workspace no longer has Content Studio. */
+function contentClosedNotice(member: Member): string {
+	return [
+		`<b>${escapeHtml(member.orgName)}</b> does not have ${MODULES.content.label} at the moment, so I cannot draft for it.`,
+		"\nYour drafts and brand brain are kept. Contact your account manager to turn it back on.",
 	].join("");
 }
 
@@ -74,9 +87,17 @@ async function findMember(telegramUserId: number): Promise<Member | null> {
 			displayName: orgMember.displayName,
 			status: organization.status,
 			suspendedReason: organization.suspendedReason,
+			contentOpen: sql<boolean>`coalesce(${orgModule.enabled} and (${orgModule.paidUntil} is null or ${orgModule.paidUntil} >= current_date), false)`,
 		})
 		.from(orgMember)
 		.innerJoin(organization, eq(organization.id, orgMember.orgId))
+		.leftJoin(
+			orgModule,
+			and(
+				eq(orgModule.orgId, orgMember.orgId),
+				eq(orgModule.module, "content"),
+			),
+		)
 		.where(eq(orgMember.telegramUserId, String(telegramUserId)))
 		.limit(1);
 
@@ -170,6 +191,11 @@ async function handleMessage(input: {
 
 	if (member.status !== "active") {
 		await tell(input.chatId, suspendedNotice(member));
+		return;
+	}
+
+	if (!member.contentOpen) {
+		await tell(input.chatId, contentClosedNotice(member));
 		return;
 	}
 
@@ -440,6 +466,11 @@ async function handlePhoto(
 		return;
 	}
 
+	if (!member.contentOpen) {
+		await tell(chatId, contentClosedNotice(member));
+		return;
+	}
+
 	const caption = message.caption?.trim() ?? "";
 
 	if (message.media_group_id && !caption) {
@@ -657,6 +688,14 @@ async function handleCallback(query: {
 
 	if (member.status !== "active") {
 		await acknowledge(query.id, `${member.orgName} is suspended.`);
+		return;
+	}
+
+	if (!member.contentOpen) {
+		await acknowledge(
+			query.id,
+			`${member.orgName} does not have ${MODULES.content.label}.`,
+		);
 		return;
 	}
 

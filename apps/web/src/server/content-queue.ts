@@ -11,8 +11,8 @@ import {
 } from "@et/db";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { readAccess, requireAccess } from "#/server/access";
 import { fail } from "#/server/errors";
+import { readModuleAccess, requireModule } from "#/server/modules";
 
 const STATUSES = ["draft", "approved", "rejected", "published"] as const;
 const ORIGINS = ["ad_hoc", "weekly_plan"] as const;
@@ -31,7 +31,7 @@ export const fetchContentQueue = createServerFn({ method: "GET" })
 		}),
 	)
 	.handler(async ({ data }) => {
-		const access = await readAccess(data.orgId);
+		const access = (await readModuleAccess(data.orgId, "content"))?.access;
 		if (!access) return { found: false } as const;
 
 		const db = getDb();
@@ -157,7 +157,7 @@ export const decideDraft = createServerFn({ method: "POST" })
 		}),
 	)
 	.handler(async ({ data }) => {
-		const access = await requireAccess(data.orgId, "edit");
+		const { access } = await requireModule(data.orgId, "content", "edit");
 
 		const [decided] = await getDb()
 			.update(contentItem)
@@ -201,7 +201,7 @@ export const editDraft = createServerFn({ method: "POST" })
 		}),
 	)
 	.handler(async ({ data }) => {
-		const access = await requireAccess(data.orgId, "edit");
+		const { access } = await requireModule(data.orgId, "content", "edit");
 		const db = getDb();
 
 		const [item] = await db

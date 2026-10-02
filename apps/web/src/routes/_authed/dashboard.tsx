@@ -1,7 +1,10 @@
+import { MODULES } from "@et/core";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Clapperboard, Lock, PenLine } from "lucide-react";
 import { Button } from "#/components/ui/button";
 import { createTelegramInvite } from "#/server/invites";
+import type { ModuleState } from "#/server/modules";
 import { listOrganizations } from "#/server/organizations";
 
 export const Route = createFileRoute("/_authed/dashboard")({
@@ -51,6 +54,71 @@ function InviteButton({ orgId }: { orgId: string }) {
 				</div>
 			) : null}
 		</div>
+	);
+}
+
+const MODULE_ICONS = {
+	content: PenLine,
+	marketing: Clapperboard,
+} as const;
+
+/**
+ * One product in the shop window. Open modules link in; closed ones say what
+ * they would do and how to get them, since payment is arranged with us.
+ */
+function ModuleTile({ orgId, state }: { orgId: string; state: ModuleState }) {
+	const spec = MODULES[state.module];
+	const Icon = MODULE_ICONS[state.module];
+
+	const body = (
+		<>
+			<div className="flex items-center gap-2">
+				<Icon className="size-4 text-brand" aria-hidden />
+				<span className="type-label">{spec.label}</span>
+				{state.open ? null : (
+					<Lock
+						className="ml-auto size-3.5 text-muted-foreground"
+						aria-hidden
+					/>
+				)}
+			</div>
+			<p className="mt-1 type-caption text-muted-foreground">
+				{state.open
+					? state.credits
+						? `${state.credits.remaining} of ${state.credits.monthly} credits left this month`
+						: spec.description
+					: state.closedReason === "expired"
+						? "Expired — ask us to renew it."
+						: `${spec.description} Not on your plan — ask us to add it.`}
+			</p>
+		</>
+	);
+
+	const className =
+		"block rounded-md border p-brand-4 no-underline transition-colors";
+
+	if (!state.open) {
+		return (
+			<div className={`${className} border-dashed opacity-80`}>{body}</div>
+		);
+	}
+
+	return state.module === "marketing" ? (
+		<Link
+			to="/marketing/$orgId"
+			params={{ orgId }}
+			className={`${className} hover:bg-accent`}
+		>
+			{body}
+		</Link>
+	) : (
+		<Link
+			to="/content/$orgId"
+			params={{ orgId }}
+			className={`${className} hover:bg-accent`}
+		>
+			{body}
+		</Link>
 	);
 }
 
@@ -120,13 +188,18 @@ function Dashboard() {
 											{org.brandSummary ??
 												"No brand summary yet — the Brain is empty."}
 										</p>
-										<p className="mt-2 type-caption">
+										<div className="mt-brand-4 grid gap-2">
+											{org.modules.map((state) => (
+												<ModuleTile
+													key={state.module}
+													orgId={org.id}
+													state={state}
+												/>
+											))}
+										</div>
+										<p className="mt-brand-4 type-caption">
 											<Link to="/workspace/$orgId" params={{ orgId: org.id }}>
 												Brand brain
-											</Link>
-											{" · "}
-											<Link to="/content/$orgId" params={{ orgId: org.id }}>
-												Content
 											</Link>
 											{" · "}
 											<Link

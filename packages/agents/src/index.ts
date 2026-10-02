@@ -16,6 +16,7 @@ export {
 	type PhotoReading,
 	readPhoto,
 } from "./agents/photo.ts";
+export { type PromoBrief, writePromoBrief } from "./agents/promo.ts";
 export {
 	type PlannedPost,
 	planWeek,
@@ -31,6 +32,21 @@ export type {
 	DefinedAgent,
 } from "./define-agent.ts";
 export { defineAgent } from "./define-agent.ts";
+export {
+	createVideoJob,
+	DEFAULT_IMAGE_MODEL,
+	DEFAULT_VIDEO_MODEL,
+	downloadVideo,
+	type GeneratedImage,
+	generateImage,
+	getVideoJob,
+	MediaGenerationError,
+	toDataUrl,
+	type VideoJob,
+	verifyVideoWebhook,
+	videoJobError,
+	webhookJobId,
+} from "./media/openrouter-media.ts";
 export type {
 	ModelId,
 	ModelSpec,

@@ -4,6 +4,8 @@ export * from "./brand.ts";
 export * from "./content.ts";
 export * from "./events.ts";
 export * from "./integrations.ts";
+export * from "./marketing.ts";
+export * from "./modules.ts";
 export * from "./organizations.ts";
 export * from "./shared.ts";
 export * from "./telegram.ts";
