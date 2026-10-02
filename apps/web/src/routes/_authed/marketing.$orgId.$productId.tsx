@@ -1,13 +1,17 @@
 import {
+	LANGUAGES,
 	PROMO_ASPECT_RATIOS,
 	PROMO_DURATIONS,
 	PROMO_KIND_LABELS,
 	PROMO_KINDS,
+	PROMO_VOICE_LANGUAGES,
 	type PromoAspectRatio,
 	type PromoDuration,
 	type PromoKind,
+	type PromoVoiceLanguage,
 	promoCreditCost,
 	VIDEO_ASPECT_RATIOS,
+	voiceoverWordLimit,
 } from "@et/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -197,7 +201,7 @@ function CreatePromo({
 	productId: string;
 	remaining: number;
 	providerReady: boolean;
-	voiceReady: boolean;
+	voiceReady: Record<PromoVoiceLanguage, boolean>;
 	script: string;
 	onScriptChange: (script: string) => void;
 }) {
@@ -206,6 +210,11 @@ function CreatePromo({
 	const [aspect, setAspect] = useState<PromoAspectRatio>("4:5");
 	const [duration, setDuration] = useState<PromoDuration>(8);
 	const [voiceId, setVoiceId] = useState("");
+	const [language, setLanguage] = useState<PromoVoiceLanguage>("en");
+	// Only languages whose voice service is set up are offered.
+	const languages = PROMO_VOICE_LANGUAGES.filter(
+		(code) => code === "en" || voiceReady[code],
+	);
 	const [notes, setNotes] = useState("");
 
 	const isVideo = kind !== "image";
@@ -217,9 +226,9 @@ function CreatePromo({
 	const cost = promoCreditCost(kind, duration);
 
 	const voices = useQuery({
-		queryKey: ["marketing-voices", orgId],
-		queryFn: () => fetchVoices({ data: { orgId } }),
-		enabled: kind === "video_voice" && voiceReady,
+		queryKey: ["marketing-voices", orgId, language],
+		queryFn: () => fetchVoices({ data: { orgId, language } }),
+		enabled: kind === "video_voice" && voiceReady[language],
 		staleTime: 60 * 60 * 1000,
 	});
 
@@ -233,6 +242,7 @@ function CreatePromo({
 					aspectRatio,
 					durationSecs: isVideo ? duration : undefined,
 					voiceId: kind === "video_voice" && voiceId ? voiceId : undefined,
+					language: kind === "video_voice" ? language : undefined,
 					notes: notes.trim() || undefined,
 					script:
 						kind === "video_voice" && script.trim() ? script.trim() : undefined,
@@ -290,6 +300,21 @@ function CreatePromo({
 							The video speaks your voiceover in the voice you pick, and you
 							also get the voiceover on its own as an MP3.
 						</p>
+						{languages.length > 1 ? (
+							<div className="sm:col-span-2">
+								<Choice
+									label="Voiceover language"
+									options={languages}
+									value={language}
+									onChange={(code) => {
+										setLanguage(code);
+										// Voices belong to one language's service.
+										setVoiceId("");
+									}}
+									render={(code) => LANGUAGES[code].label}
+								/>
+							</div>
+						) : null}
 						<div className="space-y-2">
 							<Label htmlFor="promo-voice">Voice</Label>
 							<select
@@ -298,7 +323,11 @@ function CreatePromo({
 								value={voiceId}
 								onChange={(event) => setVoiceId(event.target.value)}
 							>
-								<option value="">Our default narrator</option>
+								<option value="">
+									{language === "am"
+										? "Mekdes — female (default)"
+										: "Our default narrator"}
+								</option>
 								{(voices.data ?? []).map((voice) => (
 									<option key={voice.id} value={voice.id}>
 										{voice.name}
@@ -319,12 +348,16 @@ function CreatePromo({
 								rows={3}
 								maxLength={600}
 								value={script}
-								placeholder="Leave empty and we write it for you."
+								placeholder={
+									language === "am"
+										? "ባዶ ይተዉት፣ እኛ እንጽፍልዎታለን።"
+										: "Leave empty and we write it for you."
+								}
 								onChange={(event) => onScriptChange(event.target.value)}
 							/>
 							<p className="type-caption text-muted-foreground">
-								About {Math.floor(duration * 2.3)} words fit in {duration}{" "}
-								seconds.
+								About {voiceoverWordLimit(language, duration)} words fit in{" "}
+								{duration} seconds.
 							</p>
 						</div>
 					</div>

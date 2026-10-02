@@ -69,7 +69,12 @@ export type PromoSettings = {
 	aspectRatio: string;
 	/** Video only. */
 	durationSecs?: number;
-	/** Video + voice only; the ElevenLabs voice for the voiceover MP3. */
+	/** Video + voice only: the language the voiceover is spoken in. Absent is English. */
+	language?: "en" | "am";
+	/**
+	 * Video + voice only: the voice — an ElevenLabs voice id for English, an
+	 * Azure voice name (e.g. "am-ET-MekdesNeural") for Amharic.
+	 */
 	voiceId?: string;
 	/** Free text from the requester: mood, setting, offer to mention. */
 	notes?: string;

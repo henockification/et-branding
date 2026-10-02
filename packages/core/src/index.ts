@@ -33,6 +33,7 @@ export type {
 	PromoAspectRatio,
 	PromoDuration,
 	PromoKind,
+	PromoVoiceLanguage,
 } from "./modules.ts";
 export {
 	isModuleKey,
@@ -42,6 +43,8 @@ export {
 	PROMO_DURATIONS,
 	PROMO_KIND_LABELS,
 	PROMO_KINDS,
+	PROMO_VOICE_LANGUAGES,
 	promoCreditCost,
 	VIDEO_ASPECT_RATIOS,
+	voiceoverWordLimit,
 } from "./modules.ts";

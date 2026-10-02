@@ -9,7 +9,7 @@ import {
 	videoJobError,
 	writePromoBrief,
 } from "@et/agents";
-import { enabledLanguages } from "@et/core";
+import { LANGUAGES } from "@et/core";
 import {
 	agentRun,
 	and,
@@ -25,6 +25,11 @@ import {
 	type PromoStatus,
 } from "@et/db";
 import { resolveSpeechModel } from "@et/elevenlabs";
+import {
+	amharicVoice,
+	isAzureSpeechConfigured,
+	synthesizeAzure,
+} from "#/server/marketing/azure-speech";
 import {
 	defaultVoiceId,
 	getElevenLabs,
@@ -79,8 +84,26 @@ const ACTIVE: PromoStatus[] = [
 	"storing",
 ];
 
+/**
+ * The Amharic voice could not be put on the video. There is no fallback:
+ * the default video model narrates only in English, and a silent video is
+ * not what was paid for.
+ */
+class AmharicVoiceError extends Error {}
+
+const AMHARIC_VOICE_FAILED =
+	"Couldn't add the Amharic voice this time. Your credits have been returned.";
+
+/** The language the voiceover is spoken in; English unless chosen. */
+function voiceLanguage(row: MarketingGeneration): "en" | "am" {
+	return row.kind === "video_voice" && row.settings.language === "am"
+		? "am"
+		: "en";
+}
+
 /** Words a requester sees; the provider's raw error goes to the logs. */
 function userFacingError(error: unknown): string {
+	if (error instanceof AmharicVoiceError) return AMHARIC_VOICE_FAILED;
 	if (error instanceof MediaGenerationError && error.status === 400) {
 		return "The media model refused these settings or photos. Try another shape, length or direction.";
 	}
@@ -245,7 +268,7 @@ async function writeBrief(row: MarketingGeneration): Promise<PromoBrief> {
 			aspectRatio: row.settings.aspectRatio,
 			durationSecs: row.settings.durationSecs,
 			request: row.settings.notes,
-			language: enabledLanguages()[0],
+			language: LANGUAGES[voiceLanguage(row)],
 		});
 
 		const { cost, modelId, ...brief } = result;
@@ -350,11 +373,18 @@ async function submitVideo(
 			});
 			return { id: job.id, withVoice: true };
 		} catch (error) {
+			if (voiceLanguage(row) === "am") {
+				throw new AmharicVoiceError("Voiced video refused.", { cause: error });
+			}
 			console.error(
 				`promo ${row.id}: voiced video refused, narrating instead`,
 				error,
 			);
 		}
+	}
+
+	if (voiceLanguage(row) === "am") {
+		throw new AmharicVoiceError("No Amharic voiceover to put on the video.");
 	}
 
 	const job = await createVideoJob({
@@ -365,6 +395,33 @@ async function submitVideo(
 				: `${brief.videoPrompt}\n\nSound: fitting background music and natural ambient sound. No speech.`,
 	});
 	return { id: job.id, withVoice: false };
+}
+
+/**
+ * The voiceover, in the promo's language: Azure for Amharic (nobody else
+ * speaks it), ElevenLabs for English. Null when English voice is not set up.
+ */
+async function recordVoiceover(
+	row: MarketingGeneration,
+	script: string,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+	if (voiceLanguage(row) === "am") {
+		if (!isAzureSpeechConfigured()) {
+			throw new Error("Azure Speech is not configured.");
+		}
+		return synthesizeAzure({
+			voice: amharicVoice(row.settings.voiceId),
+			text: script,
+		});
+	}
+
+	const voice = row.settings.voiceId || defaultVoiceId();
+	if (!isVoiceConfigured() || !voice) return null;
+	return getElevenLabs().textToSpeech({
+		voiceId: voice,
+		text: script,
+		modelId: resolveSpeechModel(),
+	});
 }
 
 /** Records the voiceover (video + voice), then submits the video. */
@@ -381,26 +438,26 @@ async function startVideo(row: MarketingGeneration): Promise<void> {
 		if (!(await transition(row.id, "briefing", "voicing"))) return;
 		from = "voicing";
 
-		const voice = row.settings.voiceId || defaultVoiceId();
-		if (isVoiceConfigured() && voice) {
-			try {
-				voiceover = await getElevenLabs().textToSpeech({
-					voiceId: voice,
-					text: brief.voiceoverScript,
-					modelId: resolveSpeechModel(),
-				});
+		try {
+			voiceover = await recordVoiceover(row, brief.voiceoverScript);
+			if (voiceover) {
 				const key = marketingKeys.voiceover(row.orgId, row.id);
 				await putMedia(key, voiceover, "audio/mpeg");
 				await getDb()
 					.update(marketingGeneration)
 					.set({ voiceoverKey: key, updatedAt: new Date() })
 					.where(eq(marketingGeneration.id, row.id));
-			} catch (error) {
-				// Without the recording the video narrates the script itself:
-				// a voiced promo either way, just not in the chosen voice.
-				console.error(`promo ${row.id}: voiceover failed`, error);
-				voiceover = null;
 			}
+		} catch (error) {
+			if (voiceLanguage(row) === "am") {
+				throw new AmharicVoiceError("Amharic voiceover failed.", {
+					cause: error,
+				});
+			}
+			// Without the recording the video narrates the script itself:
+			// a voiced promo either way, just not in the chosen voice.
+			console.error(`promo ${row.id}: voiceover failed`, error);
+			voiceover = null;
 		}
 	}
 
@@ -459,6 +516,10 @@ export async function advance(
 	if (job.status === "pending" || job.status === "in_progress") return;
 
 	if (job.status !== "completed") {
+		if (voiceLanguage(row) === "am") {
+			await fail(row, AMHARIC_VOICE_FAILED, videoJobError(job));
+			return;
+		}
 		if (row.externalIds.withVoice && !row.externalIds.fallback) {
 			try {
 				if (await retryNarrated(row, job)) return;

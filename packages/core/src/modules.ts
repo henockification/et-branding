@@ -52,6 +52,29 @@ export type PromoDuration = (typeof PROMO_DURATIONS)[number];
 export const PROMO_ASPECT_RATIOS = ["1:1", "4:5", "9:16", "16:9"] as const;
 export type PromoAspectRatio = (typeof PROMO_ASPECT_RATIOS)[number];
 
+/**
+ * Languages a voiceover can be spoken in. Independent of `LANGUAGES[…].enabled`,
+ * which gates written posts: a promo voiceover is a sentence or two, so the
+ * cost concern that paused Amharic posts does not apply.
+ */
+export const PROMO_VOICE_LANGUAGES = ["en", "am"] as const;
+export type PromoVoiceLanguage = (typeof PROMO_VOICE_LANGUAGES)[number];
+
+/**
+ * Speaking pace for a voiceover that sounds unhurried. A script written to
+ * this fits its clip; one written to the clip's length in "seconds of
+ * reading" always runs long. Amharic words are longer, so fewer fit.
+ */
+const WORDS_PER_SECOND: Record<string, number> = { en: 2.3, am: 1.8 };
+
+/** How many words of voiceover fit in `seconds`, in that language. */
+export function voiceoverWordLimit(
+	languageCode: string,
+	seconds: number,
+): number {
+	return Math.floor(seconds * (WORDS_PER_SECOND[languageCode] ?? 2.3));
+}
+
 /** Aspect ratios video models accept; 1:1 and 4:5 are image-only. */
 export const VIDEO_ASPECT_RATIOS = ["9:16", "16:9"] as const;
 

@@ -2,6 +2,7 @@ import {
 	PROMO_ASPECT_RATIOS,
 	PROMO_DURATIONS,
 	PROMO_KINDS,
+	PROMO_VOICE_LANGUAGES,
 	type PromoDuration,
 	promoCreditCost,
 	VIDEO_ASPECT_RATIOS,
@@ -19,6 +20,10 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { fail } from "#/server/errors";
+import {
+	AZURE_AMHARIC_VOICES,
+	isAzureSpeechConfigured,
+} from "#/server/marketing/azure-speech";
 import { refreshRendering, runPipeline } from "#/server/marketing/pipeline";
 import {
 	isMediaProviderConfigured,
@@ -133,7 +138,9 @@ export const fetchProduct = createServerFn({ method: "GET" })
 				notes: product.notes,
 				photoIds: product.photos.map((photo) => photo.id),
 			},
-			voiceReady: isVoiceConfigured(),
+			// Which voiceover languages can be offered: English through
+			// ElevenLabs, Amharic through Azure.
+			voiceReady: { en: isVoiceConfigured(), am: isAzureSpeechConfigured() },
 			generations: generations.map(
 				({ brief, voiceoverKey, ...generation }) => ({
 					...generation,
@@ -146,9 +153,24 @@ export const fetchProduct = createServerFn({ method: "GET" })
 	});
 
 export const fetchVoices = createServerFn({ method: "GET" })
-	.validator(orgIdSchema)
+	.validator(
+		orgIdSchema.extend({
+			language: z.enum(PROMO_VOICE_LANGUAGES).default("en"),
+		}),
+	)
 	.handler(async ({ data }) => {
 		await requireModule(data.orgId, "marketing", "read");
+
+		if (data.language === "am") {
+			if (!isAzureSpeechConfigured()) return [];
+			return AZURE_AMHARIC_VOICES.map((voice) => ({
+				id: voice.id,
+				name: voice.name,
+				description: voice.description,
+				previewUrl: null,
+			}));
+		}
+
 		if (!isVoiceConfigured()) return [];
 
 		const voices = await listVoices();
@@ -177,6 +199,7 @@ const startSchema = orgIdSchema
 			.refine((n) => (PROMO_DURATIONS as readonly number[]).includes(n))
 			.optional(),
 		voiceId: z.string().trim().max(100).optional(),
+		language: z.enum(PROMO_VOICE_LANGUAGES).optional(),
 		notes: z.string().trim().max(500).optional(),
 		script: z.string().trim().max(600).optional(),
 	})
@@ -212,6 +235,13 @@ export const startGeneration = createServerFn({ method: "POST" })
 		const { access } = await requireModule(data.orgId, "marketing", "edit");
 		if (!isMediaProviderConfigured()) {
 			fail("Promo generation is not set up yet. Please try again later.", 503);
+		}
+		if (
+			data.kind === "video_voice" &&
+			data.language === "am" &&
+			!isAzureSpeechConfigured()
+		) {
+			fail("Amharic voiceovers are not available yet.", 503);
 		}
 		const db = getDb();
 
@@ -256,6 +286,8 @@ export const startGeneration = createServerFn({ method: "POST" })
 					aspectRatio: data.aspectRatio,
 					durationSecs: data.kind === "image" ? undefined : data.durationSecs,
 					voiceId: data.kind === "video_voice" ? data.voiceId : undefined,
+					language:
+						data.kind === "video_voice" ? (data.language ?? "en") : undefined,
 					notes: data.notes || undefined,
 					script:
 						data.kind === "video_voice" ? data.script || undefined : undefined,

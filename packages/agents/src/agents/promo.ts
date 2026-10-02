@@ -1,4 +1,9 @@
-import { defaultLanguage, type Language, type PromoKind } from "@et/core";
+import {
+	defaultLanguage,
+	type Language,
+	type PromoKind,
+	voiceoverWordLimit,
+} from "@et/core";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { type CallCost, estimateCost } from "../cost.ts";
@@ -8,13 +13,6 @@ import {
 	resolveVisionModelId,
 } from "../models/registry.ts";
 import type { BrandContext } from "./content.ts";
-
-/**
- * Speaking pace for a voiceover that sounds unhurried. A script written to
- * this fits its clip; one written to the clip's length in "seconds of
- * reading" always runs long.
- */
-const WORDS_PER_SECOND = 2.3;
 
 const promoBriefSchema = z.object({
 	/** What the product is and looks like, from the photos. */
@@ -58,7 +56,7 @@ export async function writePromoBrief(options: {
 
 	const language = options.language ?? defaultLanguage();
 	const seconds = options.durationSecs ?? 8;
-	const maxWords = Math.floor(seconds * WORDS_PER_SECOND);
+	const maxWords = voiceoverWordLimit(language.code, seconds);
 
 	const result = await generateObject({
 		model: resolveModel(modelId),
@@ -88,6 +86,9 @@ export async function writePromoBrief(options: {
 				: "voiceoverScript: leave empty.",
 			options.kind === "video_voice"
 				? "videoPrompt must not include anyone speaking on screen; the voice is a narrator over the footage."
+				: "",
+			options.kind === "video_voice" && language.code === "am"
+				? "Write the voiceover in natural, spoken Amharic in Ge'ez script, the way an Ethiopian radio ad sounds — not a word-for-word translation. Keep the product's own name as it appears on the label. All other fields stay in English."
 				: "",
 		]
 			.filter((line) => line !== "")
