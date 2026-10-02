@@ -432,6 +432,43 @@ export async function advanceByExternalId(jobId: string): Promise<void> {
 	await advance(row, await getVideoJob(jobId));
 }
 
+/** How long a video must have been rendering before a page visit checks on it. */
+const PAGE_CHECK_AFTER_MS = 20 * 1000;
+
+/**
+ * Finishes any of this product's videos that are done at the provider. Run
+ * from the product page's own polling, so someone watching sees the video
+ * within seconds of it finishing instead of waiting for the webhook or the
+ * 5-minute cron. Never throws: the page must load regardless.
+ */
+export async function refreshRendering(productId: string): Promise<void> {
+	const rendering = await getDb()
+		.select()
+		.from(marketingGeneration)
+		.where(
+			and(
+				eq(marketingGeneration.productId, productId),
+				eq(marketingGeneration.status, "rendering"),
+				lte(
+					marketingGeneration.stepStartedAt,
+					new Date(Date.now() - PAGE_CHECK_AFTER_MS),
+				),
+			),
+		)
+		.limit(5);
+
+	await Promise.all(
+		rendering.map(async (row) => {
+			if (!row.pendingExternalId) return;
+			try {
+				await advance(row, await getVideoJob(row.pendingExternalId));
+			} catch (error) {
+				console.error(`promo ${row.id}: page check failed`, error);
+			}
+		}),
+	);
+}
+
 /**
  * The safety net under the webhook: finishes videos whose webhook never came
  * (or cannot reach us, as in local dev), and gives up on stalled promos.

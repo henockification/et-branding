@@ -19,7 +19,7 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { fail } from "#/server/errors";
-import { runPipeline } from "#/server/marketing/pipeline";
+import { refreshRendering, runPipeline } from "#/server/marketing/pipeline";
 import {
 	isMediaProviderConfigured,
 	isVoiceConfigured,
@@ -98,6 +98,10 @@ export const fetchProduct = createServerFn({ method: "GET" })
 			)
 			.limit(1);
 		if (!product) return { found: false } as const;
+
+		// Someone is watching: pick up finished videos now rather than at the
+		// next webhook or cron.
+		await refreshRendering(product.id);
 
 		const generations = await db
 			.select({
