@@ -287,9 +287,8 @@ function CreatePromo({
 				{kind === "video_voice" ? (
 					<div className="grid gap-brand-4 sm:grid-cols-2">
 						<p className="type-caption text-muted-foreground sm:col-span-2">
-							The video narrates your script itself. The voice you pick here
-							records the same script as a separate MP3, for when you edit the
-							promo yourself.
+							The video speaks your voiceover in the voice you pick, and you
+							also get the voiceover on its own as an MP3.
 						</p>
 						<div className="space-y-2">
 							<Label htmlFor="promo-voice">Voice</Label>

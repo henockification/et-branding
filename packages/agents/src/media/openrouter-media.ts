@@ -23,6 +23,31 @@ export function resolveVideoModel(): string {
 	return process.env.OPENROUTER_VIDEO_MODEL?.trim() || DEFAULT_VIDEO_MODEL;
 }
 
+/**
+ * A video model that takes a finished voiceover as its soundtrack, so the
+ * clip speaks in the voice the requester picked.
+ *
+ * Not a documented OpenRouter input: Wan 2.7's only provider, AtlasCloud,
+ * honours an `audio` passthrough option (verified October 2026). Hence the
+ * provider is pinned — options are only forwarded to the provider they are
+ * keyed by — and callers must be ready to fall back if it stops working.
+ */
+export const DEFAULT_VOICE_VIDEO = {
+	model: "alibaba/wan-2.7",
+	provider: "atlas-cloud",
+} as const;
+
+export function resolveVoiceVideo(): { model: string; provider: string } {
+	return {
+		model:
+			process.env.OPENROUTER_VOICE_VIDEO_MODEL?.trim() ||
+			DEFAULT_VOICE_VIDEO.model,
+		provider:
+			process.env.OPENROUTER_VOICE_VIDEO_PROVIDER?.trim() ||
+			DEFAULT_VOICE_VIDEO.provider,
+	};
+}
+
 export class MediaGenerationError extends Error {
 	readonly status: number;
 
@@ -146,17 +171,24 @@ export type VideoJob = {
 	error?: string | { message?: string };
 };
 
-/** Starts a clip that opens on `firstFrame` (a data URL). */
+/**
+ * Starts a clip that opens on `firstFrame` (a data URL). With `audio` (an
+ * MP3 data URL) it goes to the voice-video model, which builds the clip
+ * around that soundtrack; without, to the default video model.
+ */
 export async function createVideoJob(input: {
 	prompt: string;
 	durationSecs: number;
 	aspectRatio: string;
 	firstFrame: string;
 	generateAudio: boolean;
+	audio?: string;
 	/** Signed completion webhook; omit to rely on polling. */
 	callbackUrl?: string;
 }): Promise<{ id: string; modelId: string }> {
-	const modelId = resolveVideoModel();
+	const voice = input.audio ? resolveVoiceVideo() : null;
+	const modelId = voice?.model ?? resolveVideoModel();
+
 	const job = await call<{ id: string }>("POST", "/videos", {
 		model: modelId,
 		prompt: input.prompt,
@@ -165,6 +197,14 @@ export async function createVideoJob(input: {
 		resolution: "720p",
 		generate_audio: input.generateAudio,
 		frame_images: [{ ...asInput(input.firstFrame), frame_type: "first_frame" }],
+		...(voice
+			? {
+					provider: {
+						only: [voice.provider],
+						options: { [voice.provider]: { audio: input.audio } },
+					},
+				}
+			: {}),
 		...(input.callbackUrl ? { callback_url: input.callbackUrl } : {}),
 	});
 	return { id: job.id, modelId };

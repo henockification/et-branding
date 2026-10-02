@@ -37,6 +37,10 @@ import { refundCredits } from "#/server/modules";
 /**
  * Turns a queued promo into a stored image or video.
  *
+ * Video + voice: ElevenLabs records the voiceover, then the voice-video
+ * model (Wan 2.7) builds the clip around it; if that path fails anywhere,
+ * the default model (Veo) narrates the script in its own voice instead.
+ *
  *   image:         queued → briefing → storing → completed
  *   video:         queued → briefing → rendering → storing → completed
  *   video + voice: queued → briefing → voicing → rendering → storing → completed
@@ -313,11 +317,62 @@ async function renderImage(row: MarketingGeneration): Promise<void> {
 	});
 }
 
-/** Records the voiceover MP3 (video + voice), then submits the video. */
+/**
+ * Submits the video job. For video + voice with a recorded voiceover, the
+ * voice-video model builds the clip around that recording, so it speaks in
+ * the chosen voice. If that submission is refused — it relies on an
+ * undocumented provider option — the default model narrates the script in
+ * its own voice instead, so the requester still gets a voiced promo.
+ */
+async function submitVideo(
+	row: MarketingGeneration,
+	voiceover: Uint8Array | null,
+): Promise<{ id: string; withVoice: boolean }> {
+	// biome-ignore lint/style/noNonNullAssertion: set by the brief step.
+	const brief = row.brief!;
+	const [firstPhoto] = await productPhotos(row.productId, 1);
+	if (!firstPhoto) throw new Error("The product has no photos.");
+
+	const common = {
+		durationSecs: row.settings.durationSecs ?? 8,
+		aspectRatio: row.settings.aspectRatio,
+		firstFrame: toDataUrl(firstPhoto, "image/jpeg"),
+		generateAudio: true,
+		callbackUrl: videoCallbackUrl(),
+	};
+
+	if (row.kind === "video_voice" && voiceover) {
+		try {
+			const job = await createVideoJob({
+				...common,
+				prompt: `${brief.videoPrompt}\n\nA narrated product ad set to the supplied voiceover; nobody on screen speaks. Soft background music under the voice.`,
+				audio: toDataUrl(voiceover, "audio/mpeg"),
+			});
+			return { id: job.id, withVoice: true };
+		} catch (error) {
+			console.error(
+				`promo ${row.id}: voiced video refused, narrating instead`,
+				error,
+			);
+		}
+	}
+
+	const job = await createVideoJob({
+		...common,
+		prompt:
+			row.kind === "video_voice"
+				? `${brief.videoPrompt}\n\nA warm, clear narrator voiceover (nobody on screen speaks) says: "${brief.voiceoverScript}" Soft background music under the voice.`
+				: `${brief.videoPrompt}\n\nSound: fitting background music and natural ambient sound. No speech.`,
+	});
+	return { id: job.id, withVoice: false };
+}
+
+/** Records the voiceover (video + voice), then submits the video. */
 async function startVideo(row: MarketingGeneration): Promise<void> {
 	// biome-ignore lint/style/noNonNullAssertion: set by the brief step.
 	const brief = row.brief!;
 	let from: PromoStatus = "briefing";
+	let voiceover: Uint8Array<ArrayBuffer> | null = null;
 
 	if (row.kind === "video_voice") {
 		if (!brief.voiceoverScript) {
@@ -329,46 +384,66 @@ async function startVideo(row: MarketingGeneration): Promise<void> {
 		const voice = row.settings.voiceId || defaultVoiceId();
 		if (isVoiceConfigured() && voice) {
 			try {
-				const mp3 = await getElevenLabs().textToSpeech({
+				voiceover = await getElevenLabs().textToSpeech({
 					voiceId: voice,
 					text: brief.voiceoverScript,
 					modelId: resolveSpeechModel(),
 				});
 				const key = marketingKeys.voiceover(row.orgId, row.id);
-				await putMedia(key, mp3, "audio/mpeg");
+				await putMedia(key, voiceover, "audio/mpeg");
 				await getDb()
 					.update(marketingGeneration)
 					.set({ voiceoverKey: key, updatedAt: new Date() })
 					.where(eq(marketingGeneration.id, row.id));
 			} catch (error) {
-				// The video narrates the script itself; the MP3 is a bonus, not
-				// worth failing the promo over.
-				console.error(`promo ${row.id}: voiceover MP3 failed`, error);
+				// Without the recording the video narrates the script itself:
+				// a voiced promo either way, just not in the chosen voice.
+				console.error(`promo ${row.id}: voiceover failed`, error);
+				voiceover = null;
 			}
 		}
 	}
 
-	const [firstPhoto] = await productPhotos(row.productId, 1);
-	if (!firstPhoto) throw new Error("The product has no photos.");
-
-	const prompt =
-		row.kind === "video_voice"
-			? `${brief.videoPrompt}\n\nA warm, clear narrator voiceover (nobody on screen speaks) says: "${brief.voiceoverScript}" Soft background music under the voice.`
-			: `${brief.videoPrompt}\n\nSound: fitting background music and natural ambient sound. No speech.`;
-
-	const job = await createVideoJob({
-		prompt,
-		durationSecs: row.settings.durationSecs ?? 8,
-		aspectRatio: row.settings.aspectRatio,
-		firstFrame: toDataUrl(firstPhoto, "image/jpeg"),
-		generateAudio: true,
-		callbackUrl: videoCallbackUrl(),
-	});
+	const job = await submitVideo(row, voiceover);
 
 	await transition(row.id, from, "rendering", {
-		externalIds: { video: job.id },
+		externalIds: { video: job.id, withVoice: job.withVoice },
 		pendingExternalId: job.id,
 	});
+}
+
+/**
+ * A voiced render failed at the provider: try once more with the default
+ * model narrating the script, rather than failing the promo. Claimed by
+ * swapping the pending job id, so the webhook and the poll cannot both retry.
+ */
+async function retryNarrated(
+	row: MarketingGeneration,
+	failedJob: VideoJob,
+): Promise<boolean> {
+	console.error(
+		`promo ${row.id}: voiced video failed, narrating instead`,
+		videoJobError(failedJob),
+	);
+	const job = await submitVideo(row, null);
+
+	const [claimed] = await getDb()
+		.update(marketingGeneration)
+		.set({
+			externalIds: { video: job.id, withVoice: false, fallback: true },
+			pendingExternalId: job.id,
+			stepStartedAt: new Date(),
+			updatedAt: new Date(),
+		})
+		.where(
+			and(
+				eq(marketingGeneration.id, row.id),
+				eq(marketingGeneration.status, "rendering"),
+				eq(marketingGeneration.pendingExternalId, failedJob.id),
+			),
+		)
+		.returning({ id: marketingGeneration.id });
+	return Boolean(claimed);
 }
 
 /**
@@ -384,6 +459,13 @@ export async function advance(
 	if (job.status === "pending" || job.status === "in_progress") return;
 
 	if (job.status !== "completed") {
+		if (row.externalIds.withVoice && !row.externalIds.fallback) {
+			try {
+				if (await retryNarrated(row, job)) return;
+			} catch (error) {
+				console.error(`promo ${row.id}: narrated retry failed`, error);
+			}
+		}
 		await fail(
 			row,
 			"The video model could not make this promo. Your credits have been returned.",

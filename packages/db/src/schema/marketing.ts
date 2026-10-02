@@ -89,6 +89,10 @@ export type PromoBrief = {
 export type PromoExternalIds = {
 	/** OpenRouter video job. */
 	video?: string;
+	/** The job was given the ElevenLabs voiceover as its soundtrack. */
+	withVoice?: boolean;
+	/** A voiced render failed and this job is the narrated retry. */
+	fallback?: boolean;
 };
 
 export const marketingGeneration = pgTable(

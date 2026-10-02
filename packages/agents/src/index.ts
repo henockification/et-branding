@@ -36,6 +36,7 @@ export {
 	createVideoJob,
 	DEFAULT_IMAGE_MODEL,
 	DEFAULT_VIDEO_MODEL,
+	DEFAULT_VOICE_VIDEO,
 	downloadVideo,
 	type GeneratedImage,
 	generateImage,
