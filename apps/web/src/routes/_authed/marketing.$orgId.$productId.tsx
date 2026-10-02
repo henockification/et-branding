@@ -464,6 +464,7 @@ function PromoCard({
 					// biome-ignore lint/a11y/useMediaCaption: generated promo; the voiceover script is shown below.
 					<video
 						src={src}
+						poster={promo.hasOpeningFrame ? `${src}?file=hero` : undefined}
 						controls
 						playsInline
 						preload="metadata"
@@ -477,6 +478,23 @@ function PromoCard({
 						className="max-h-[32rem] w-full rounded-md bg-muted object-contain"
 					/>
 				)
+			) : promo.hasOpeningFrame && promo.status !== "failed" ? (
+				// While the video renders, show the frame it will open on.
+				<figure className="relative">
+					<img
+						src={`${src}?file=hero`}
+						alt={`Opening frame for ${productName}`}
+						className="max-h-[32rem] w-full rounded-md bg-muted object-contain"
+					/>
+					<figcaption
+						className="absolute inset-x-0 bottom-0 rounded-b-md bg-background/80 p-2 text-center type-caption"
+						aria-live="polite"
+					>
+						<span className="animate-pulse">
+							Opening frame ready · {stepLabel(promo)}…
+						</span>
+					</figcaption>
+				</figure>
 			) : (
 				<div
 					className="flex aspect-video items-center justify-center rounded-md bg-muted p-brand-4 text-center type-caption"

@@ -180,6 +180,8 @@ export const marketingKeys = {
 		`orgs/${orgId}/marketing/generations/${generationId}/output.${extension}`,
 	voiceover: (orgId: string, generationId: string) =>
 		`orgs/${orgId}/marketing/generations/${generationId}/voiceover.mp3`,
+	hero: (orgId: string, generationId: string, extension: string) =>
+		`orgs/${orgId}/marketing/generations/${generationId}/hero.${extension}`,
 };
 
 /**

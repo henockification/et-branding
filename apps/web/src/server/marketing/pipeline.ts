@@ -64,7 +64,7 @@ import { refundCredits } from "#/server/modules";
 const AGENT = "promo";
 
 /** Photos the brief agent and the image model look at. */
-const MAX_BRIEF_IMAGES = 4;
+const MAX_BRIEF_IMAGES = 6;
 const MAX_REFERENCE_IMAGES = 6;
 
 /** A video still rendering after this is given up on. */
@@ -197,6 +197,65 @@ async function productPhotos(
 }
 
 /**
+ * The product's photos with the one the brief judged most complete first:
+ * reference order matters to image models, and a photo of loose contents
+ * must not lead when there is one of the packaging.
+ */
+async function photosHeroFirst(
+	row: MarketingGeneration,
+	limit: number,
+): Promise<Uint8Array<ArrayBuffer>[]> {
+	const photos = await productPhotos(row.productId, MAX_BRIEF_IMAGES);
+	const hero = (row.brief?.heroPhoto ?? 1) - 1;
+	const ordered =
+		hero > 0 && hero < photos.length
+			? [
+					photos[hero] as Uint8Array<ArrayBuffer>,
+					...photos.filter((_, i) => i !== hero),
+				]
+			: photos;
+	return ordered.slice(0, limit);
+}
+
+/**
+ * The picture the video opens on: the product already placed in the
+ * requested scene, made by the image model from all the product photos.
+ *
+ * Image-to-video animates *from* its first frame, so opening on a raw upload
+ * (say, loose beans on a table) pins the whole clip to that photo whatever
+ * the prompt asks for. If the frame cannot be made, the best photo is used.
+ */
+async function openingFrame(row: MarketingGeneration): Promise<{
+	dataUrl: string;
+	heroKey?: string;
+	heroUsd?: number;
+}> {
+	// biome-ignore lint/style/noNonNullAssertion: set by the brief step.
+	const brief = row.brief!;
+	const photos = await photosHeroFirst(row, MAX_REFERENCE_IMAGES);
+	try {
+		const image = await generateImage({
+			prompt: brief.imagePrompt,
+			aspectRatio: row.settings.aspectRatio,
+			references: photos.map((jpeg) => toDataUrl(jpeg, "image/jpeg")),
+		});
+		const extension = image.mediaType === "image/jpeg" ? "jpg" : "png";
+		const heroKey = marketingKeys.hero(row.orgId, row.id, extension);
+		await putMedia(heroKey, image.bytes, image.mediaType);
+		return {
+			dataUrl: toDataUrl(image.bytes, image.mediaType),
+			heroKey,
+			heroUsd: image.usd,
+		};
+	} catch (error) {
+		console.error(`promo ${row.id}: opening frame failed, using photo`, error);
+		const [photo] = photos;
+		if (!photo) throw new Error("The product has no photos.");
+		return { dataUrl: toDataUrl(photo, "image/jpeg") };
+	}
+}
+
+/**
  * Runs a queued generation as far as it can go in this request. Never
  * throws: a failure is recorded on the row and refunded. Safe to call more
  * than once; only the first call gets past `queued`.
@@ -317,7 +376,7 @@ async function writeBrief(row: MarketingGeneration): Promise<PromoBrief> {
 async function renderImage(row: MarketingGeneration): Promise<void> {
 	// biome-ignore lint/style/noNonNullAssertion: set by the brief step.
 	const brief = row.brief!;
-	const photos = await productPhotos(row.productId, MAX_REFERENCE_IMAGES);
+	const photos = await photosHeroFirst(row, MAX_REFERENCE_IMAGES);
 
 	const image = await generateImage({
 		prompt: brief.imagePrompt,
@@ -350,16 +409,15 @@ async function renderImage(row: MarketingGeneration): Promise<void> {
 async function submitVideo(
 	row: MarketingGeneration,
 	voiceover: Uint8Array | null,
+	firstFrame: string,
 ): Promise<{ id: string; withVoice: boolean }> {
 	// biome-ignore lint/style/noNonNullAssertion: set by the brief step.
 	const brief = row.brief!;
-	const [firstPhoto] = await productPhotos(row.productId, 1);
-	if (!firstPhoto) throw new Error("The product has no photos.");
 
 	const common = {
 		durationSecs: row.settings.durationSecs ?? 8,
 		aspectRatio: row.settings.aspectRatio,
-		firstFrame: toDataUrl(firstPhoto, "image/jpeg"),
+		firstFrame,
 		generateAudio: true,
 		callbackUrl: videoCallbackUrl(),
 	};
@@ -461,10 +519,16 @@ async function startVideo(row: MarketingGeneration): Promise<void> {
 		}
 	}
 
-	const job = await submitVideo(row, voiceover);
+	const frame = await openingFrame(row);
+	const job = await submitVideo(row, voiceover, frame.dataUrl);
 
 	await transition(row.id, from, "rendering", {
-		externalIds: { video: job.id, withVoice: job.withVoice },
+		externalIds: {
+			video: job.id,
+			withVoice: job.withVoice,
+			heroKey: frame.heroKey,
+			heroUsd: frame.heroUsd,
+		},
 		pendingExternalId: job.id,
 	});
 }
@@ -482,12 +546,27 @@ async function retryNarrated(
 		`promo ${row.id}: voiced video failed, narrating instead`,
 		videoJobError(failedJob),
 	);
-	const job = await submitVideo(row, null);
+	// Open on the same frame as the voiced attempt, if one was made.
+	const stored = row.externalIds.heroKey
+		? await getPhoto(row.externalIds.heroKey)
+		: null;
+	const firstFrame = stored
+		? toDataUrl(
+				stored,
+				row.externalIds.heroKey?.endsWith(".jpg") ? "image/jpeg" : "image/png",
+			)
+		: (await openingFrame(row)).dataUrl;
+	const job = await submitVideo(row, null, firstFrame);
 
 	const [claimed] = await getDb()
 		.update(marketingGeneration)
 		.set({
-			externalIds: { video: job.id, withVoice: false, fallback: true },
+			externalIds: {
+				...row.externalIds,
+				video: job.id,
+				withVoice: false,
+				fallback: true,
+			},
 			pendingExternalId: job.id,
 			stepStartedAt: new Date(),
 			updatedAt: new Date(),
@@ -554,7 +633,9 @@ export async function advance(
 		await transition(row.id, "storing", "completed", {
 			outputKey: key,
 			outputMime: "video/mp4",
-			providerCost: (job.usage?.cost ?? 0).toFixed(6),
+			providerCost: (
+				(job.usage?.cost ?? 0) + (row.externalIds.heroUsd ?? 0)
+			).toFixed(6),
 			completedAt: new Date(),
 		});
 	} catch (error) {

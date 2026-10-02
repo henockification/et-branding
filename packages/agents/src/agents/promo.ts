@@ -7,25 +7,54 @@ import {
 import { generateObject } from "ai";
 import { z } from "zod";
 import { type CallCost, estimateCost } from "../cost.ts";
-import {
-	assertModelUsable,
-	resolveModel,
-	resolveVisionModelId,
-} from "../models/registry.ts";
+import { getModelSpec, isModelId, type ModelId } from "../models/catalog.ts";
+import { assertModelUsable, resolveModel } from "../models/registry.ts";
 import type { BrandContext } from "./content.ts";
 
+/**
+ * Writes the brief. Not the cheapest vision model: Flash-Lite let the
+ * workspace's brand profile replace the product in the photos (a coffee bag
+ * became "the PulsEvent registration device") and dropped the requester's
+ * direction. A brief costs a fraction of a cent on either.
+ */
+const PROMO_BRIEF_MODEL: ModelId = "google/gemini-2.5-flash";
+
+function resolveBriefModelId(): ModelId {
+	const override = process.env.ET_PROMO_MODEL;
+	if (!override) return PROMO_BRIEF_MODEL;
+	if (!isModelId(override) || !getModelSpec(override).seesImages) {
+		throw new Error(
+			`ET_PROMO_MODEL="${override}" is not a catalog model that accepts images.`,
+		);
+	}
+	return override;
+}
+
 const promoBriefSchema = z.object({
+	/**
+	 * Every distinct element of the requester's direction, listed before the
+	 * prompts are written so none is dropped. Empty when there is none.
+	 */
+	directionElements: z.array(z.string()).max(20),
 	/** What the product is and looks like, from the photos. */
 	productDescription: z.string().min(10).max(800),
-	/** For a still: scene, light, composition — with the product unchanged. */
+	/** 1-based index of the photo that shows the product most completely. */
+	heroPhoto: z.number().int().min(1),
+	/**
+	 * A single still of the product in the scene. For videos it is also the
+	 * opening frame, so it shows the scene as the clip begins.
+	 */
 	imagePrompt: z.string().min(20).max(1500),
-	/** For a clip: the same, plus how the camera and the scene move. */
+	/** The clip, starting from that still: what moves and how the camera moves. */
 	videoPrompt: z.string().min(20).max(1500),
 	/** Spoken words only, no stage directions. */
 	voiceoverScript: z.string().max(600),
 });
 
-export type PromoBrief = z.infer<typeof promoBriefSchema> & {
+export type PromoBrief = Omit<
+	z.infer<typeof promoBriefSchema>,
+	"directionElements"
+> & {
 	cost: CallCost;
 	modelId: string;
 };
@@ -35,9 +64,9 @@ export type PromoBrief = z.infer<typeof promoBriefSchema> & {
  * what the product is, the prompts for the image and video models, and a
  * voiceover sized to the clip.
  *
- * One call for all of it, so the image, the video and the voice tell the same
- * story. The media models never see the brand; this is where the brand gets
- * in.
+ * Order of authority, highest first: the product (its photos and name), the
+ * requester's direction, then the brand — which only sets tone. The brand is
+ * the seller, never the subject.
  */
 export async function writePromoBrief(options: {
 	/** JPEG previews of the product photos, ~1024px. */
@@ -47,40 +76,51 @@ export async function writePromoBrief(options: {
 	kind: PromoKind;
 	aspectRatio: string;
 	durationSecs?: number;
-	/** What the requester asked for this time: mood, setting, an offer. */
+	/** What the requester asked for: the scene, mood, an offer. Binding. */
 	request?: string | null;
 	language?: Language;
 }): Promise<PromoBrief> {
-	const modelId = resolveVisionModelId();
+	const modelId = resolveBriefModelId();
 	assertModelUsable(modelId);
 
 	const language = options.language ?? defaultLanguage();
 	const seconds = options.durationSecs ?? 8;
 	const maxWords = voiceoverWordLimit(language.code, seconds);
+	const direction = options.request?.trim();
+	const isVideo = options.kind !== "image";
 
 	const result = await generateObject({
 		model: resolveModel(modelId),
 		schema: promoBriefSchema,
 		system: [
-			`You are the creative director for ${options.brand.name}, briefing AI image and video models to make a promo for one of their products.`,
-			options.brand.summary ? `What they do: ${options.brand.summary}` : "",
+			"You brief AI image and video models to make an advertisement for ONE product.",
+			"",
+			"THE PRODUCT is defined only by its name and the attached photos. It is the subject of every prompt. Describe it from the photos: packaging, colours, label, logo.",
+			"",
+			"THE REQUESTER'S DIRECTION, when given, is binding. It is the scene. First list each distinct element of it in directionElements (setting, props, light, camera move, mood, sound). Then write the prompts so that every listed element appears, in the requester's own words where possible. You may add detail (lens, composition, texture) but never drop, replace or contradict an element. With no direction, invent a fitting scene.",
+			"",
+			`THE SELLER is ${options.brand.name}. Use what follows only for tone and audience. Never put the seller's own services, devices, software, screens or logo into the prompts unless they are visible in the product photos.`,
+			options.brand.summary ? `Seller: ${options.brand.summary}` : "",
 			options.brand.voice
-				? `Brand voice: ${JSON.stringify(options.brand.voice)}`
+				? `Seller's voice: ${JSON.stringify(options.brand.voice)}`
 				: "",
 			options.brand.audience
 				? `Audience: ${JSON.stringify(options.brand.audience)}`
 				: "",
 			"",
-			"The photos show the real product. The models will receive them as references.",
-			"",
 			"Rules for every prompt:",
-			"- The product must stay exactly as photographed: same shape, colours, label, logo and packaging text. Say so explicitly in each prompt. Never invent claims, prices or text that is not on the product or in the request.",
-			"- Describe a scene that sells it to this audience: setting, props, lighting, lens and mood. Concrete and visual, one paragraph, no lists.",
+			"- The product stays exactly as photographed: same shape, colours, label, logo and packaging text. Say so explicitly. Never invent claims, prices or text.",
+			"- Concrete and visual, one paragraph, no lists.",
 			`- Frame for ${options.aspectRatio}.`,
-			"- No people's faces unless the request asks for them.",
+			"- No people's faces unless the direction asks for them.",
 			"",
-			`imagePrompt: a single advertising still.`,
-			`videoPrompt: a ${seconds}-second clip. Open on the product, then describe camera movement (slow push-in, orbit, reveal) and what moves in the scene. One continuous shot.`,
+			"heroPhoto: the 1-based number of the photo that shows the product most completely — its packaging and label if it has them, rather than loose contents.",
+			isVideo
+				? "imagePrompt: the still the video OPENS on — the product placed in the full scene, as the first moment of the clip. The video model starts from exactly this picture, so everything the scene needs must already be in it."
+				: "imagePrompt: a single advertising still of the product in the scene.",
+			isVideo
+				? `videoPrompt: a ${seconds}-second clip starting from that still. Describe what moves (mist, steam, light) and the camera move from the direction (default: a slow push-in ending sharp on the product). One continuous shot; the product never changes.`
+				: "videoPrompt: a short description of the same scene in motion (unused for stills, keep it brief).",
 			options.kind === "video_voice"
 				? `voiceoverScript: in ${language.promptName}, at most ${maxWords} words so it fits ${seconds} seconds. Spoken words only — no stage directions, no emoji, no hashtags. End on the product name or a short call to action.`
 				: "voiceoverScript: leave empty.",
@@ -105,29 +145,29 @@ export async function writePromoBrief(options: {
 					{
 						type: "text" as const,
 						text: [
-							`Product: ${options.product.name}`,
+							`PRODUCT: ${options.product.name} (${options.images.length} photo${options.images.length === 1 ? "" : "s"} attached, numbered in order)`,
 							options.product.notes?.trim()
-								? `About it: ${options.product.notes.trim()}`
+								? `About the product: ${options.product.notes.trim()}`
 								: "",
-							options.request?.trim()
-								? `This time they asked for: ${options.request.trim()}`
-								: "",
+							direction
+								? `DIRECTION (binding — every element must appear):\n${direction}`
+								: "DIRECTION: none given.",
 						]
 							.filter(Boolean)
-							.join("\n"),
+							.join("\n\n"),
 					},
 				],
 			},
 		],
-		temperature: 0.7,
+		temperature: 0.4,
 	});
 
+	const { directionElements: _elements, ...brief } = result.object;
 	return {
-		...result.object,
+		...brief,
+		heroPhoto: Math.min(Math.max(brief.heroPhoto, 1), options.images.length),
 		voiceoverScript:
-			options.kind === "video_voice"
-				? result.object.voiceoverScript.trim()
-				: "",
+			options.kind === "video_voice" ? brief.voiceoverScript.trim() : "",
 		cost: estimateCost(modelId, result.usage),
 		modelId,
 	};

@@ -83,14 +83,15 @@ export const VIDEO_ASPECT_RATIOS = ["9:16", "16:9"] as const;
  * provider's price — that stays in the admin console.
  *
  * Pegged at roughly one credit per US$0.10 of provider cost (October 2026):
- * an image is ~$0.07; Veo 3.1 Fast video with audio is $0.12 a second; the
- * ElevenLabs voiceover is cents. Revisit when the models or prices change.
+ * an image is ~$0.07; video is ~$0.10–0.12 a second plus a ~$0.07 opening
+ * frame; the voiceover is cents. Revisit when the models or prices change.
  */
 export function promoCreditCost(
 	kind: PromoKind,
 	durationSecs: PromoDuration = 8,
 ): number {
 	if (kind === "image") return 1;
-	const video = Math.ceil(durationSecs * 1.2); // 4s → 5, 6s → 8, 8s → 10
+	// Seconds of video, plus the opening frame generated for it.
+	const video = Math.ceil(durationSecs * 1.2) + 1; // 4s → 6, 6s → 9, 8s → 11
 	return kind === "video" ? video : video + 1;
 }

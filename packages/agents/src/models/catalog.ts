@@ -94,6 +94,17 @@ export const MODEL_CATALOG = {
 		notes:
 			"Cheapest dependable vision model. Gemini bills a photo as a few hundred tokens, so looking at one costs a fraction of a cent.",
 	},
+	"google/gemini-2.5-flash": {
+		id: "google/gemini-2.5-flash",
+		vendor: "google",
+		usdPerMillionInput: 0.3,
+		usdPerMillionOutput: 2.5,
+		contextTokens: 1_048_576,
+		seesImages: true,
+		pricedOn: "2026-10-02",
+		notes:
+			"Writes Marketing Studio's promo briefs. Flash-Lite there let the workspace's brand profile override the product in the photos; one brief is still a fraction of a cent.",
+	},
 	"anthropic/claude-haiku-4.5": {
 		id: "anthropic/claude-haiku-4.5",
 		vendor: "anthropic",

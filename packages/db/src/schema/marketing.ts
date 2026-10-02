@@ -88,6 +88,8 @@ export type PromoBrief = {
 	imagePrompt: string;
 	videoPrompt: string;
 	voiceoverScript: string;
+	/** 1-based: the product photo that shows it most completely. */
+	heroPhoto?: number;
 };
 
 /** The provider's ids for each step, so a webhook can find its row. */
@@ -98,6 +100,10 @@ export type PromoExternalIds = {
 	withVoice?: boolean;
 	/** A voiced render failed and this job is the narrated retry. */
 	fallback?: boolean;
+	/** R2 key of the generated opening frame the video was animated from. */
+	heroKey?: string;
+	/** What generating that frame cost, added to the video's cost. */
+	heroUsd?: number;
 };
 
 export const marketingGeneration = pgTable(

@@ -117,6 +117,7 @@ export const fetchProduct = createServerFn({ method: "GET" })
 				brief: marketingGeneration.brief,
 				outputMime: marketingGeneration.outputMime,
 				voiceoverKey: marketingGeneration.voiceoverKey,
+				externalIds: marketingGeneration.externalIds,
 				credits: marketingGeneration.credits,
 				error: marketingGeneration.error,
 				createdAt: marketingGeneration.createdAt,
@@ -142,9 +143,10 @@ export const fetchProduct = createServerFn({ method: "GET" })
 			// ElevenLabs, Amharic through Azure.
 			voiceReady: { en: isVoiceConfigured(), am: isAzureSpeechConfigured() },
 			generations: generations.map(
-				({ brief, voiceoverKey, ...generation }) => ({
+				({ brief, voiceoverKey, externalIds, ...generation }) => ({
 					...generation,
 					hasVoiceover: Boolean(voiceoverKey),
+					hasOpeningFrame: Boolean(externalIds.heroKey),
 					// The requester sees the voiceover, not the prompts behind it.
 					voiceoverScript: brief?.voiceoverScript || null,
 				}),

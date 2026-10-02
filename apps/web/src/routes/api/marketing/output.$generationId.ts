@@ -6,8 +6,8 @@ import { readModuleAccess } from "#/server/modules";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * A finished promo, image or video, or with `?file=voiceover` its voiceover
- * MP3. `?download=1` serves it as an attachment named after the product.
+ * A finished promo, image or video; with `?file=voiceover` its voiceover
+ * MP3, with `?file=hero` the frame a video opens on. `?download=1` serves it as an attachment named after the product.
  * Byte ranges are honoured so video and audio play and seek.
  */
 export const Route = createFileRoute("/api/marketing/output/$generationId")({
@@ -22,6 +22,7 @@ export const Route = createFileRoute("/api/marketing/output/$generationId")({
 						orgId: marketingGeneration.orgId,
 						key: marketingGeneration.outputKey,
 						voiceoverKey: marketingGeneration.voiceoverKey,
+						externalIds: marketingGeneration.externalIds,
 						kind: marketingGeneration.kind,
 						product: marketingProduct.name,
 					})
@@ -41,14 +42,19 @@ export const Route = createFileRoute("/api/marketing/output/$generationId")({
 				}
 
 				const search = new URL(request.url).searchParams;
-				// `?file=voiceover` is the ElevenLabs MP3 of a video + voice promo.
+				// `?file=voiceover`: the voiceover MP3 of a video + voice promo.
+				// `?file=hero`: the generated frame a video opens on.
+				const file = search.get("file");
 				const key =
-					search.get("file") === "voiceover" ? row.voiceoverKey : row.key;
+					file === "voiceover"
+						? row.voiceoverKey
+						: file === "hero"
+							? (row.externalIds.heroKey ?? null)
+							: row.key;
 				if (!key) return notFound();
 
 				const extension = key.slice(key.lastIndexOf(".") + 1);
-				const label =
-					search.get("file") === "voiceover" ? "voiceover" : row.kind;
+				const label = file === "voiceover" || file === "hero" ? file : row.kind;
 
 				return (
 					(await mediaResponse(key, request, {
